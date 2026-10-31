@@ -1,0 +1,4693 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#16a34a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="format-detection" content="telephone=no">
+  <title>爆速家計簿</title>
+  <style>
+    :root {
+      --green: #16a34a;
+      --green-dark: #15803d;
+      --green-light: #dcfce7;
+      --green-pale: #f0fdf4;
+      --white: #ffffff;
+      --text: #14532d;
+      --muted: #6b7280;
+      --minus: #dc2626;
+      --minus-light: #fee2e2;
+      --radius: 18px;
+      --tabbar-height: 68px;
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      touch-action: manipulation;
+      -webkit-text-size-adjust: 100%;
+      text-size-adjust: 100%;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, "Hiragino Sans", "Yu Gothic UI", sans-serif;
+      background: var(--green-pale);
+      color: var(--text);
+      min-height: 100vh;
+      padding-bottom: calc(var(--tabbar-height) + var(--safe-bottom));
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body.modal-open {
+      overflow: hidden;
+    }
+
+    button {
+      touch-action: manipulation;
+      font-family: inherit;
+    }
+
+    /* ===== タップ操作の共通設定（長押しメニュー・文字選択・ダブルタップ拡大を抑止） ===== */
+    button,
+    .log-item,
+    .cal-card,
+    .ev-card,
+    .cal-date-text,
+    .mg-range,
+    .log-thumb,
+    .cal-card-thumb,
+    .lightbox,
+    .lightbox img {
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+      touch-action: manipulation;
+    }
+
+    /* 押した瞬間のフィードバック */
+    button:active {
+      filter: brightness(0.92);
+    }
+
+    .log-item:active,
+    .cal-card:active,
+    .ev-card:active {
+      filter: brightness(0.95);
+    }
+
+    .cal-date-text:active,
+    .mg-range:active {
+      opacity: 0.7;
+    }
+
+    .container {
+      max-width: 560px;
+      margin: 0 auto;
+      padding: calc(16px + var(--safe-top)) 16px 24px;
+    }
+
+    /* ===== タブ画面切り替え ===== */
+    .view {
+      display: none;
+    }
+
+    .view.active {
+      display: block;
+    }
+
+    /* ===== タブバー ===== */
+    .tabbar {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: calc(var(--tabbar-height) + var(--safe-bottom));
+      padding-bottom: var(--safe-bottom);
+      background: var(--white);
+      border-top: 2px solid var(--green-light);
+      display: flex;
+      z-index: 15;
+      box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.04);
+    }
+
+    .tab {
+      flex: 1;
+      background: none;
+      border: none;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      position: relative;
+    }
+
+    .tab-icon {
+      font-size: 24px;
+      line-height: 1;
+      filter: grayscale(1);
+      opacity: 0.6;
+    }
+
+    .tab.active {
+      color: var(--green);
+    }
+
+    .tab.active .tab-icon {
+      filter: none;
+      opacity: 1;
+    }
+
+    .tab.active::before {
+      content: "";
+      position: absolute;
+      top: -2px;
+      left: 25%;
+      right: 25%;
+      height: 3px;
+      border-radius: 0 0 3px 3px;
+      background: var(--green);
+    }
+
+    /* ===== 保存不可警告 ===== */
+    .warning {
+      display: none;
+      background: #fef9c3;
+      color: #854d0e;
+      border: 1px solid #fde047;
+      border-radius: 12px;
+      padding: 10px 14px;
+      font-size: 13px;
+      margin-bottom: 12px;
+      line-height: 1.5;
+    }
+
+    .warning.show {
+      display: block;
+    }
+
+    /* ===== 残高表示（期間切り替え） ===== */
+    .summary {
+      background: var(--green);
+      color: var(--white);
+      border-radius: var(--radius);
+      padding: 14px 18px 16px;
+      margin-bottom: 16px;
+      box-shadow: 0 4px 14px rgba(22, 163, 74, 0.3);
+    }
+
+    .period-tabs {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 4px;
+      background: rgba(255, 255, 255, 0.18);
+      border-radius: 10px;
+      padding: 3px;
+      margin-bottom: 12px;
+    }
+
+    .period-btn,
+    .mg-period-btn {
+      border: none;
+      background: none;
+      color: var(--white);
+      font-size: 13px;
+      font-weight: 700;
+      padding: 10px 0;
+      border-radius: 8px;
+      cursor: pointer;
+      opacity: 0.85;
+    }
+
+    .period-btn.active,
+    .mg-period-btn.active {
+      background: var(--white);
+      color: var(--green-dark);
+      opacity: 1;
+    }
+
+    .summary-label {
+      font-size: 13px;
+      opacity: 0.9;
+    }
+
+    .summary-range {
+      font-size: 12px;
+      opacity: 0.75;
+      margin-left: 6px;
+    }
+
+    .summary-balance {
+      font-size: 34px;
+      font-weight: 800;
+      margin: 2px 0 8px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .summary-sub {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      font-size: 13px;
+    }
+
+    /* ===== 入力エリア ===== */
+    .input-card {
+      background: var(--white);
+      border-radius: var(--radius);
+      padding: 18px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+      border: 2px solid var(--green-light);
+    }
+
+    .amount-wrap {
+      position: relative;
+      margin-bottom: 12px;
+    }
+
+    .yen {
+      position: absolute;
+      left: 18px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 36px;
+      font-weight: 700;
+      color: var(--green);
+      pointer-events: none;
+    }
+
+    #amount {
+      width: 100%;
+      font-size: 52px;
+      font-weight: 800;
+      padding: 18px 18px 18px 58px;
+      border: 3px solid var(--green-light);
+      border-radius: 14px;
+      color: var(--text);
+      background: var(--green-pale);
+      outline: none;
+      text-align: right;
+    }
+
+    .memo-row {
+      display: flex;
+      gap: 10px;
+    }
+
+    #memo {
+      flex: 1;
+      min-width: 0;
+      font-size: 24px;
+      padding: 16px 18px;
+      border: 3px solid var(--green-light);
+      border-radius: 14px;
+      color: var(--text);
+      background: var(--green-pale);
+      outline: none;
+    }
+
+    #amount:focus,
+    #memo:focus {
+      border-color: var(--green);
+      background: var(--white);
+    }
+
+    #amount::placeholder,
+    #memo::placeholder {
+      color: #a3c9b0;
+      font-weight: 500;
+    }
+
+    .photo-btn {
+      flex: 0 0 68px;
+      border: 3px solid var(--green-light);
+      background: var(--green-pale);
+      border-radius: 14px;
+      font-size: 30px;
+      cursor: pointer;
+    }
+
+    .photo-btn.has-photo {
+      background: var(--green);
+      border-color: var(--green);
+    }
+
+    .photo-btn.loading {
+      opacity: 0.5;
+      pointer-events: none;
+    }
+
+    .photo-preview {
+      display: none;
+      position: relative;
+      width: 110px;
+      margin-top: 14px;
+    }
+
+    .photo-preview.show {
+      display: block;
+    }
+
+    .photo-preview img {
+      width: 110px;
+      height: 110px;
+      object-fit: cover;
+      border-radius: 12px;
+      border: 3px solid var(--green);
+      display: block;
+    }
+
+    .photo-remove {
+      position: absolute;
+      top: -12px;
+      right: -12px;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: 2px solid var(--white);
+      background: var(--minus);
+      color: var(--white);
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .buttons {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .btn {
+      border: none;
+      border-radius: 16px;
+      font-size: 54px;
+      font-weight: 900;
+      height: 96px;
+      cursor: pointer;
+      transition: transform 0.06s;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+    }
+
+    .btn small {
+      font-size: 14px;
+      font-weight: 700;
+      margin-top: 4px;
+    }
+
+    .btn:active {
+      transform: scale(0.96);
+    }
+
+    .btn-plus {
+      background: var(--green);
+      color: var(--white);
+    }
+
+    .btn-minus {
+      background: var(--white);
+      color: var(--minus);
+      border: 3px solid var(--minus);
+    }
+
+    .hint {
+      text-align: center;
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 10px;
+    }
+
+    .hint-touch {
+      display: none;
+    }
+
+    .shake {
+      animation: shake 0.3s;
+      border-color: var(--minus) !important;
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-8px); }
+      75% { transform: translateX(8px); }
+    }
+
+    /* ===== ログ ===== */
+    .log-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin: 26px 4px 10px;
+    }
+
+    .log-title {
+      font-size: 18px;
+      font-weight: 800;
+    }
+
+    .log-count {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--muted);
+      margin-left: 6px;
+    }
+
+    .clear-btn {
+      background: none;
+      border: 1px solid #cbd5e1;
+      color: var(--muted);
+      font-size: 13px;
+      min-height: 36px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+
+    .clear-btn.armed {
+      background: var(--minus);
+      border-color: var(--minus);
+      color: var(--white);
+    }
+
+    .log-list {
+      list-style: none;
+    }
+
+    .log-item {
+      background: var(--white);
+      border-radius: 14px;
+      padding: 10px 6px 10px 14px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-left: 6px solid var(--green);
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+      cursor: pointer;
+    }
+
+    .log-item.new {
+      animation: fadeIn 0.25s ease-out;
+    }
+
+    .log-item.minus {
+      border-left-color: var(--minus);
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .log-thumb {
+      flex: 0 0 52px;
+      width: 52px;
+      height: 52px;
+      object-fit: cover;
+      border-radius: 10px;
+      background: var(--green-light);
+      cursor: zoom-in;
+    }
+
+    .log-main {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .log-memo {
+      font-size: 16px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .log-memo.empty {
+      color: #9ca3af;
+      font-weight: 400;
+    }
+
+    .log-time {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 2px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .log-link {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--green-dark);
+      margin-top: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .log-amount {
+      font-size: 20px;
+      font-weight: 800;
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+      color: var(--green);
+    }
+
+    .log-item.minus .log-amount,
+    .cal-card.minus .cal-card-amount {
+      color: var(--minus);
+    }
+
+    .del-btn {
+      flex: 0 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: none;
+      border: none;
+      color: #cbd5e1;
+      font-size: 20px;
+      cursor: pointer;
+      min-width: 44px;
+      min-height: 44px;
+      padding: 0 6px;
+      border-radius: 10px;
+    }
+
+    .del-btn.armed {
+      background: var(--minus);
+      color: var(--white);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .empty-log {
+      text-align: center;
+      color: var(--muted);
+      padding: 30px 0;
+      font-size: 14px;
+    }
+
+    /* ===== カレンダー（1日表示） ===== */
+    .cal-wrap {
+      max-width: 560px;
+      margin: 0 auto;
+    }
+
+    .cal-header {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      background: var(--green);
+      color: var(--white);
+      padding: calc(12px + var(--safe-top)) 14px 12px;
+      box-shadow: 0 3px 12px rgba(22, 163, 74, 0.3);
+    }
+
+    .cal-nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .cal-arrow {
+      flex: 0 0 44px;
+      height: 44px;
+      border: none;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.18);
+      color: var(--white);
+      font-size: 26px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .cal-date {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .cal-date-text {
+      text-align: center;
+      cursor: pointer;
+    }
+
+    .cal-date-main {
+      font-size: 26px;
+      font-weight: 900;
+      letter-spacing: 1px;
+      white-space: nowrap;
+    }
+
+    .cal-date-sub {
+      font-size: 12px;
+      opacity: 0.85;
+      margin-top: 2px;
+    }
+
+    .cal-pick-btn {
+      flex: 0 0 44px;
+      height: 44px;
+      border: 2px solid rgba(255, 255, 255, 0.6);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.15);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+
+    .cal-day-summary {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 6px 14px;
+      margin-top: 8px;
+      font-size: 13px;
+    }
+
+    .cal-today-btn {
+      border: 1px solid rgba(255, 255, 255, 0.7);
+      background: none;
+      color: var(--white);
+      font-size: 13px;
+      font-weight: 700;
+      min-height: 32px;
+      padding: 6px 14px;
+      border-radius: 20px;
+      cursor: pointer;
+    }
+
+    .timeline {
+      position: relative;
+      background: var(--white);
+      margin: 0 0 90px;
+    }
+
+    .hour-row {
+      display: flex;
+      min-height: 64px;
+      border-top: 1px solid #e5efe8;
+    }
+
+    .hour-label {
+      flex: 0 0 58px;
+      text-align: right;
+      padding: 4px 10px 0 0;
+      font-size: 12px;
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .hour-row.current .hour-label {
+      color: var(--green);
+      font-weight: 800;
+    }
+
+    .hour-slot {
+      flex: 1;
+      min-width: 0;
+      border-left: 2px solid var(--green-light);
+      padding: 5px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .cal-card {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 44px;
+      background: var(--green-pale);
+      border-left: 5px solid var(--green);
+      border-radius: 10px;
+      padding: 8px 10px;
+      cursor: pointer;
+    }
+
+    .cal-card.minus {
+      background: #fff5f5;
+      border-left-color: var(--minus);
+    }
+
+    .cal-card-time {
+      font-size: 13px;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+
+    .cal-card-memo {
+      flex: 1;
+      min-width: 0;
+      font-size: 14px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .link-badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--green-dark);
+      background: var(--white);
+      border: 1px solid var(--green);
+      border-radius: 6px;
+      padding: 0 6px;
+      margin-right: 6px;
+      vertical-align: 1px;
+    }
+
+    .cal-card-amount {
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--green);
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .cal-card-thumb {
+      width: 36px;
+      height: 36px;
+      object-fit: cover;
+      border-radius: 8px;
+      background: var(--green-light);
+      cursor: zoom-in;
+    }
+
+    /* ===== 予定カード ===== */
+    .ev-card {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      background: var(--white);
+      border: 2px solid var(--green);
+      border-radius: 10px;
+      padding: 8px 10px;
+      cursor: pointer;
+    }
+
+    .ev-time {
+      font-size: 13px;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      line-height: 1.35;
+      text-align: center;
+      white-space: pre-line;
+    }
+
+    .ev-main {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .ev-title {
+      font-size: 15px;
+      font-weight: 800;
+      word-break: break-word;
+    }
+
+    .ev-meta {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+      margin-top: 4px;
+      font-size: 12px;
+    }
+
+    .ev-tag {
+      background: var(--green);
+      color: var(--white);
+      font-size: 11px;
+      font-weight: 800;
+      padding: 1px 7px;
+      border-radius: 6px;
+    }
+
+    .ev-cat {
+      background: var(--green-light);
+      color: var(--green-dark);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 1px 8px;
+      border-radius: 20px;
+    }
+
+    .ev-budget {
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .ev-budget.over {
+      color: var(--minus);
+    }
+
+    .ev-memo {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 4px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .ev-edit-icon {
+      font-size: 14px;
+      color: #9ca3af;
+    }
+
+    .now-line {
+      position: absolute;
+      left: 58px;
+      right: 0;
+      height: 2px;
+      background: var(--green-dark);
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    .now-line::before {
+      content: "";
+      position: absolute;
+      left: -6px;
+      top: -5px;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--green-dark);
+    }
+
+    /* ===== 右下の＋ボタン ===== */
+    .fab {
+      position: fixed;
+      right: 18px;
+      bottom: calc(var(--tabbar-height) + var(--safe-bottom) + 18px);
+      width: 62px;
+      height: 62px;
+      border-radius: 50%;
+      border: none;
+      background: var(--green);
+      color: var(--white);
+      font-size: 36px;
+      line-height: 1;
+      box-shadow: 0 6px 18px rgba(22, 163, 74, 0.45);
+      cursor: pointer;
+      z-index: 10;
+    }
+
+    .fab:active {
+      transform: scale(0.92);
+    }
+
+    /* ===== 管理画面 ===== */
+    .mg-head {
+      background: var(--green);
+      color: var(--white);
+      border-radius: var(--radius);
+      padding: 14px;
+      margin-bottom: 16px;
+      box-shadow: 0 4px 14px rgba(22, 163, 74, 0.3);
+    }
+
+    .mg-nav {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .mg-range {
+      flex: 1;
+      min-width: 0;
+      text-align: center;
+      cursor: pointer;
+    }
+
+    .mg-range-main {
+      font-size: 22px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .mg-range-sub {
+      font-size: 12px;
+      opacity: 0.85;
+      margin-top: 2px;
+    }
+
+    .mg-card {
+      background: var(--white);
+      border: 2px solid var(--green-light);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+
+    .mg-card-title {
+      font-size: 16px;
+      font-weight: 800;
+      margin-bottom: 12px;
+    }
+
+    .bar-row {
+      margin-bottom: 14px;
+    }
+
+    .bar-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      font-size: 14px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .bar-head strong {
+      font-size: 20px;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .bar-head .plus {
+      color: var(--green);
+    }
+
+    .bar-head .minus {
+      color: var(--minus);
+    }
+
+    .bar-track {
+      height: 26px;
+      background: #eef5f0;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .bar-fill {
+      height: 100%;
+      width: 0;
+      border-radius: 8px;
+      transition: width 0.4s ease;
+    }
+
+    .bar-fill.plus {
+      background: var(--green);
+    }
+
+    .bar-fill.minus {
+      background: var(--minus);
+    }
+
+    .mg-diff {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      border-top: 1px dashed #cfe3d6;
+      padding-top: 10px;
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .mg-diff strong {
+      font-size: 18px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .pie-wrap {
+      display: flex;
+      justify-content: center;
+      margin: 4px 0 18px;
+    }
+
+    .pie {
+      position: relative;
+      width: 210px;
+      height: 210px;
+      border-radius: 50%;
+      background: #e5efe8;
+    }
+
+    .pie-hole {
+      position: absolute;
+      inset: 24%;
+      background: var(--white);
+      border-radius: 50%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+    }
+
+    .pie-hole span {
+      font-size: 11px;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .pie-hole strong {
+      font-size: 18px;
+      font-weight: 900;
+      font-variant-numeric: tabular-nums;
+      margin-top: 2px;
+    }
+
+    .mg-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    .mg-table th {
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 700;
+      text-align: left;
+      padding: 8px 6px;
+      border-bottom: 2px solid var(--green-light);
+      white-space: nowrap;
+    }
+
+    .mg-table td {
+      padding: 10px 6px;
+      border-bottom: 1px solid #e5efe8;
+      vertical-align: middle;
+    }
+
+    .mg-table .col-color {
+      width: 36px;
+      text-align: center;
+    }
+
+    .mg-table .num {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+
+    .mg-table td.num {
+      font-weight: 700;
+    }
+
+    .mg-table tfoot td {
+      font-weight: 800;
+      border-bottom: none;
+      border-top: 2px solid var(--green-light);
+    }
+
+    .swatch {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border-radius: 5px;
+      vertical-align: middle;
+    }
+
+    .mg-cat-name {
+      font-weight: 700;
+      word-break: break-word;
+    }
+
+    .mg-pct {
+      display: block;
+      font-size: 11px;
+      color: var(--muted);
+      font-weight: 500;
+    }
+
+    .mg-table td.mg-over {
+      color: var(--minus);
+    }
+
+    .mg-table td.mg-dash {
+      color: #9ca3af;
+      font-weight: 500;
+    }
+
+    .mg-empty td {
+      text-align: center;
+      color: var(--muted);
+      padding: 24px 0;
+    }
+
+    /* ===== 設定画面 ===== */
+    .settings-title {
+      font-size: 24px;
+      font-weight: 900;
+      margin: 6px 4px 16px;
+    }
+
+    .settings-card {
+      background: var(--white);
+      border: 2px solid var(--green-light);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+
+    .settings-card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 4px;
+    }
+
+    .settings-card-title {
+      font-size: 16px;
+      font-weight: 800;
+      margin-bottom: 4px;
+    }
+
+    .settings-card-head .settings-card-title {
+      margin-bottom: 0;
+    }
+
+    .settings-note {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 12px;
+      line-height: 1.5;
+    }
+
+    .cat-list {
+      list-style: none;
+      margin-bottom: 12px;
+    }
+
+    .cat-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 4px;
+      border-bottom: 1px solid #e5efe8;
+    }
+
+    .cat-item:last-child {
+      border-bottom: none;
+    }
+
+    .cat-name {
+      flex: 1;
+      min-width: 0;
+      font-size: 16px;
+      font-weight: 700;
+      word-break: break-word;
+    }
+
+    .cat-count {
+      font-size: 12px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .icon-btn {
+      border: 2px solid var(--green-light);
+      background: var(--white);
+      color: var(--text);
+      border-radius: 10px;
+      min-width: 44px;
+      height: 44px;
+      padding: 0 12px;
+      font-size: 14px;
+      font-weight: 800;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .icon-btn.danger {
+      color: var(--minus);
+      border-color: var(--minus-light);
+    }
+
+    .icon-btn.danger.armed {
+      background: var(--minus);
+      border-color: var(--minus);
+      color: var(--white);
+      font-size: 12px;
+    }
+
+    .add-line-btn {
+      width: 100%;
+      height: 50px;
+      border: 2px dashed var(--green);
+      background: var(--green-pale);
+      color: var(--green-dark);
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .text-btn {
+      align-self: flex-start;
+      border: none;
+      background: none;
+      color: var(--green-dark);
+      font-size: 14px;
+      font-weight: 800;
+      min-height: 44px;
+      padding: 10px 4px;
+      margin: -8px 0;
+      cursor: pointer;
+    }
+
+    /* ===== バックアップ ===== */
+    .check-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 44px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .check-row input {
+      width: 22px;
+      height: 22px;
+      accent-color: var(--green);
+    }
+
+    .bk-actions {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+      margin-top: 8px;
+    }
+
+    .bk-btn {
+      height: 54px;
+      border-radius: 14px;
+      border: 2px solid var(--green);
+      background: var(--white);
+      color: var(--green-dark);
+      font-size: 16px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .bk-btn.primary {
+      background: var(--green);
+      color: var(--white);
+    }
+
+    .bk-btn:disabled {
+      opacity: 0.5;
+    }
+
+    .switch {
+      position: relative;
+      flex: 0 0 56px;
+      width: 56px;
+      height: 32px;
+      border-radius: 16px;
+      border: none;
+      background: #cbd5e1;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .switch::after {
+      content: "";
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: var(--white);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+      transition: transform 0.2s;
+    }
+
+    .switch.on {
+      background: var(--green);
+    }
+
+    .switch.on::after {
+      transform: translateX(24px);
+    }
+
+    .bk-status {
+      background: var(--green-pale);
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-size: 14px;
+      font-weight: 700;
+      margin-bottom: 10px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .bk-status.off {
+      color: var(--muted);
+    }
+
+    .bk-folder {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      border: 2px dashed var(--green-light);
+      border-radius: 12px;
+      padding: 10px 12px;
+      margin-bottom: 12px;
+    }
+
+    .bk-folder-text {
+      flex: 1 1 200px;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .bk-folder-text.warn {
+      color: #b45309;
+      font-weight: 700;
+    }
+
+    .bk-list-title {
+      font-size: 13px;
+      font-weight: 800;
+      color: var(--muted);
+      margin: 4px 0 4px;
+    }
+
+    .bk-list {
+      list-style: none;
+    }
+
+    .bk-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 2px;
+      border-bottom: 1px solid #e5efe8;
+    }
+
+    .bk-item:last-child {
+      border-bottom: none;
+    }
+
+    .bk-item-main {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .bk-item-time {
+      font-size: 15px;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .bk-item-meta {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .bk-empty {
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+      padding: 16px 0;
+    }
+
+    .restore-summary {
+      background: var(--green-pale);
+      border: 2px solid var(--green-light);
+      border-radius: 14px;
+      padding: 12px 14px;
+      font-size: 14px;
+      line-height: 1.8;
+    }
+
+    .restore-summary strong {
+      font-variant-numeric: tabular-nums;
+    }
+
+    .restore-warn {
+      font-size: 12px;
+      color: var(--minus);
+      font-weight: 700;
+      line-height: 1.6;
+      margin-top: 12px;
+    }
+
+    /* ===== モーダル共通 ===== */
+    .modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(20, 83, 45, 0.45);
+      z-index: 25;
+      align-items: center;
+      justify-content: center;
+      padding: calc(16px + var(--safe-top)) 16px calc(16px + var(--safe-bottom));
+      overscroll-behavior: contain;
+      cursor: pointer;
+    }
+
+    .modal.top {
+      z-index: 27;
+    }
+
+    .modal.show {
+      display: flex;
+    }
+
+    .modal-card {
+      background: var(--white);
+      border-radius: 20px;
+      width: 100%;
+      max-width: 420px;
+      max-height: 90vh;
+      max-height: 90dvh;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
+      padding: 22px 18px 18px;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+      animation: pop 0.18s ease-out;
+      cursor: default;
+    }
+
+    @keyframes pop {
+      from { opacity: 0; transform: scale(0.94); }
+      to { opacity: 1; transform: scale(1); }
+    }
+
+    .modal-title {
+      text-align: center;
+      font-size: 18px;
+      font-weight: 800;
+      margin-bottom: 16px;
+    }
+
+    .picker-row {
+      display: grid;
+      grid-template-columns: 1.4fr 1fr 1fr;
+      gap: 8px;
+    }
+
+    .picker-select {
+      width: 100%;
+      font-size: 20px;
+      font-weight: 800;
+      font-family: inherit;
+      padding: 12px 6px;
+      border: 3px solid var(--green-light);
+      border-radius: 12px;
+      background: var(--green-pale);
+      color: var(--text);
+      text-align: center;
+      text-align-last: center;
+      -webkit-appearance: none;
+      appearance: none;
+      cursor: pointer;
+      outline: none;
+    }
+
+    .picker-preview {
+      text-align: center;
+      margin: 16px 0 18px;
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--green);
+    }
+
+    .modal-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1.5fr;
+      gap: 8px;
+    }
+
+    .modal-actions.two {
+      grid-template-columns: 1fr 1.5fr;
+    }
+
+    .modal-actions.spaced {
+      margin-top: 18px;
+    }
+
+    .modal-btn {
+      height: 52px;
+      border-radius: 12px;
+      border: 2px solid var(--green-light);
+      background: var(--white);
+      color: var(--text);
+      font-size: 15px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .modal-btn.primary {
+      background: var(--green);
+      border-color: var(--green);
+      color: var(--white);
+    }
+
+    .modal-btn.danger {
+      color: var(--minus);
+      border-color: var(--minus-light);
+    }
+
+    .modal-btn.danger.armed {
+      background: var(--minus);
+      border-color: var(--minus);
+      color: var(--white);
+      font-size: 12px;
+    }
+
+    .modal-btn.full {
+      width: 100%;
+      margin-top: 10px;
+    }
+
+    .modal-btn:disabled {
+      opacity: 0.5;
+    }
+
+    /* ===== 追加種別選択 ===== */
+    .choice-btn {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 16px;
+      margin-bottom: 10px;
+      border: 3px solid var(--green-light);
+      border-radius: 16px;
+      background: var(--green-pale);
+      color: var(--text);
+      cursor: pointer;
+      text-align: left;
+    }
+
+    .choice-btn:active {
+      border-color: var(--green);
+    }
+
+    .choice-icon {
+      font-size: 32px;
+    }
+
+    .choice-label {
+      font-size: 17px;
+      font-weight: 800;
+    }
+
+    .choice-sub {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    /* ===== フォーム ===== */
+    .form {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .form-field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .form-label {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--muted);
+    }
+
+    .form-label em {
+      font-style: normal;
+      color: var(--minus);
+      margin-left: 4px;
+    }
+
+    .form-input {
+      width: 100%;
+      min-width: 0;
+      font-size: 17px;
+      font-family: inherit;
+      padding: 11px 12px;
+      border: 3px solid var(--green-light);
+      border-radius: 12px;
+      background: var(--green-pale);
+      color: var(--text);
+      outline: none;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+
+    .form-input:focus {
+      border-color: var(--green);
+      background: var(--white);
+    }
+
+    /* iPhoneで日時入力欄が潰れる・中央寄せになるのを防止 */
+    .form-input[type="datetime-local"] {
+      display: block;
+      min-height: 52px;
+      text-align: left;
+    }
+
+    .form-input::-webkit-date-and-time-value {
+      text-align: left;
+    }
+
+    textarea.form-input {
+      resize: vertical;
+      min-height: 76px;
+      line-height: 1.5;
+    }
+
+    .form-hint {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--green);
+      text-align: right;
+      margin-top: -4px;
+    }
+
+    .form-hint.error {
+      color: var(--minus);
+    }
+
+    .form-hint.left {
+      text-align: left;
+      margin-top: 0;
+    }
+
+    .budget-wrap {
+      position: relative;
+    }
+
+    .budget-wrap span {
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-weight: 700;
+      color: var(--green);
+      pointer-events: none;
+    }
+
+    .budget-wrap .form-input {
+      padding-left: 28px;
+      text-align: right;
+    }
+
+    .seg {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .seg-btn {
+      height: 50px;
+      border-radius: 12px;
+      border: 3px solid var(--green-light);
+      background: var(--white);
+      color: var(--muted);
+      font-size: 16px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .seg-btn.active[data-type="minus"] {
+      border-color: var(--minus);
+      background: var(--minus-light);
+      color: var(--minus);
+    }
+
+    .seg-btn.active[data-type="plus"] {
+      border-color: var(--green);
+      background: var(--green-light);
+      color: var(--green-dark);
+    }
+
+    /* ===== 紐づけ確認モーダル ===== */
+    .link-info {
+      background: var(--green-pale);
+      border: 2px solid var(--green-light);
+      border-radius: 14px;
+      padding: 14px;
+      text-align: center;
+      margin-bottom: 12px;
+    }
+
+    .link-ev-title {
+      font-size: 20px;
+      font-weight: 900;
+      word-break: break-word;
+    }
+
+    .link-ev-time {
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    .link-select-wrap {
+      margin-bottom: 12px;
+    }
+
+    .link-record {
+      text-align: center;
+      font-size: 15px;
+      font-weight: 800;
+      margin-bottom: 18px;
+    }
+
+    .link-record .minus {
+      color: var(--minus);
+    }
+
+    .link-record .plus {
+      color: var(--green);
+    }
+
+    .link-note {
+      text-align: center;
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 10px;
+    }
+
+    /* ===== 拡大表示 ===== */
+    .lightbox {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.88);
+      z-index: 20;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: calc(20px + var(--safe-top)) 20px calc(20px + var(--safe-bottom));
+      cursor: zoom-out;
+      overscroll-behavior: contain;
+    }
+
+    .lightbox.show {
+      display: flex;
+    }
+
+    .lightbox img {
+      max-width: 92vw;
+      max-height: 78vh;
+      border-radius: 12px;
+      object-fit: contain;
+    }
+
+    .lightbox-caption {
+      color: var(--white);
+      margin-top: 14px;
+      font-size: 14px;
+      text-align: center;
+      line-height: 1.6;
+      white-space: pre-line;
+    }
+
+    /* ===== トースト ===== */
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: calc(var(--tabbar-height) + var(--safe-bottom) + 16px);
+      transform: translateX(-50%) translateY(200px);
+      background: var(--text);
+      color: var(--white);
+      padding: 12px 22px;
+      border-radius: 30px;
+      font-size: 15px;
+      font-weight: 700;
+      transition: transform 0.25s;
+      z-index: 30;
+      max-width: 90vw;
+      text-align: center;
+      pointer-events: none;
+    }
+
+    .toast.error {
+      background: var(--minus);
+    }
+
+    .toast.show {
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* ===== スマホ（タッチ端末）向け ===== */
+    @media (hover: none) and (pointer: coarse) {
+      .hint-desktop {
+        display: none;
+      }
+
+      .hint-touch {
+        display: inline;
+      }
+
+      /* キーボードに隠れないよう、通知は画面上部に表示 */
+      .toast {
+        top: calc(var(--safe-top) + 12px);
+        bottom: auto;
+        transform: translateX(-50%) translateY(-200px);
+      }
+
+      .toast.show {
+        transform: translateX(-50%) translateY(0);
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ========== カレンダー画面 ========== -->
+  <section class="view" id="view-calendar">
+    <div class="cal-wrap">
+      <div class="cal-header" id="calHeader">
+        <div class="cal-nav">
+          <button class="cal-arrow" id="calPrev" type="button" title="前の日">‹</button>
+          <div class="cal-date">
+            <div class="cal-date-text" id="calDateText">
+              <div class="cal-date-main" id="calDateMain"></div>
+              <div class="cal-date-sub" id="calDateSub"></div>
+            </div>
+            <button class="cal-pick-btn" id="calPickBtn" type="button" title="日付を選ぶ">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="4.5" width="18" height="16.5" rx="2.5"></rect>
+                <line x1="3" y1="9.5" x2="21" y2="9.5"></line>
+                <line x1="8" y1="2.5" x2="8" y2="6.5"></line>
+                <line x1="16" y1="2.5" x2="16" y2="6.5"></line>
+                <circle cx="8" cy="14" r="0.6" fill="#ffffff"></circle>
+                <circle cx="12" cy="14" r="0.6" fill="#ffffff"></circle>
+                <circle cx="16" cy="14" r="0.6" fill="#ffffff"></circle>
+                <circle cx="8" cy="17.5" r="0.6" fill="#ffffff"></circle>
+                <circle cx="12" cy="17.5" r="0.6" fill="#ffffff"></circle>
+              </svg>
+            </button>
+          </div>
+          <button class="cal-arrow" id="calNext" type="button" title="次の日">›</button>
+        </div>
+        <div class="cal-day-summary">
+          <span>収入 <strong id="calIncome">¥0</strong></span>
+          <span>支出 <strong id="calExpense">¥0</strong></span>
+          <span>予算 <strong id="calBudget">¥0</strong></span>
+          <button class="cal-today-btn" id="calToday" type="button">今日</button>
+        </div>
+      </div>
+      <div class="timeline" id="timeline"></div>
+    </div>
+
+    <button class="fab" id="fabAdd" type="button" title="追加">＋</button>
+  </section>
+
+  <!-- ========== 記録画面 ========== -->
+  <section class="view active" id="view-record">
+    <div class="container">
+
+      <div class="warning" id="warning">
+        ⚠ この環境ではデータを保存できません（閉じると記録が消えます）。<br>
+        ファイルをダウンロードして、ブラウザで直接開いてください。
+      </div>
+
+      <section class="summary">
+        <div class="period-tabs">
+          <button class="period-btn" type="button" data-period="day">今日</button>
+          <button class="period-btn" type="button" data-period="week">今週</button>
+          <button class="period-btn" type="button" data-period="month">今月</button>
+          <button class="period-btn" type="button" data-period="all">全期間</button>
+        </div>
+        <div>
+          <span class="summary-label" id="summaryLabel">今月の収支</span>
+          <span class="summary-range" id="summaryRange"></span>
+        </div>
+        <div class="summary-balance" id="balance">¥0</div>
+        <div class="summary-sub">
+          <span>収入 <strong id="periodIncome">¥0</strong></span>
+          <span>支出 <strong id="periodExpense">¥0</strong></span>
+        </div>
+      </section>
+
+      <section class="input-card">
+        <div class="amount-wrap">
+          <span class="yen">¥</span>
+          <input
+            id="amount"
+            type="text"
+            inputmode="numeric"
+            autocomplete="off"
+            placeholder="0"
+            autofocus
+          >
+        </div>
+        <div class="memo-row">
+          <input
+            id="memo"
+            type="text"
+            autocomplete="off"
+            enterkeyhint="done"
+            placeholder="メモ（例：ランチ）"
+          >
+          <button class="photo-btn" id="photoBtn" type="button" title="写真を追加">📷</button>
+          <input id="photoInput" type="file" accept="image/*" hidden>
+        </div>
+        <div class="photo-preview" id="photoPreview">
+          <img id="photoPreviewImg" alt="添付写真">
+          <button class="photo-remove" id="photoRemove" type="button" title="写真を外す">×</button>
+        </div>
+        <div class="buttons">
+          <button class="btn btn-plus" id="plusBtn" type="button">
+            ＋<small>収入</small>
+          </button>
+          <button class="btn btn-minus" id="minusBtn" type="button">
+            −<small>支出</small>
+          </button>
+        </div>
+        <p class="hint">
+          <span class="hint-desktop">Enter = 支出 ／ Shift + Enter = 収入 ／ Ctrl + V で画像貼り付け</span>
+          <span class="hint-touch">＋／− をタップで記録 ／ 📷 で写真を追加 ／ 記録をタップで編集</span>
+        </p>
+      </section>
+
+      <div class="log-header">
+        <h2 class="log-title">直近の記録<span class="log-count" id="logCount"></span></h2>
+        <button class="clear-btn" id="clearBtn" type="button">全削除</button>
+      </div>
+      <ul class="log-list" id="logList"></ul>
+
+    </div>
+  </section>
+
+  <!-- ========== 管理画面 ========== -->
+  <section class="view" id="view-manage">
+    <div class="container">
+
+      <section class="mg-head">
+        <div class="period-tabs">
+          <button class="mg-period-btn" type="button" data-period="day">日ごと</button>
+          <button class="mg-period-btn" type="button" data-period="week">週ごと</button>
+          <button class="mg-period-btn" type="button" data-period="month">月ごと</button>
+          <button class="mg-period-btn" type="button" data-period="all">全期間</button>
+        </div>
+        <div class="mg-nav">
+          <button class="cal-arrow" id="mgPrev" type="button" title="前の期間">‹</button>
+          <div class="mg-range" id="mgRange">
+            <div class="mg-range-main" id="mgRangeMain"></div>
+            <div class="mg-range-sub" id="mgRangeSub"></div>
+          </div>
+          <button class="cal-arrow" id="mgNext" type="button" title="次の期間">›</button>
+        </div>
+      </section>
+
+      <section class="mg-card">
+        <div class="mg-card-title">収支</div>
+        <div class="bar-row">
+          <div class="bar-head">
+            <span>収入</span>
+            <strong class="plus" id="mgIncome">¥0</strong>
+          </div>
+          <div class="bar-track"><div class="bar-fill plus" id="mgIncomeBar"></div></div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-head">
+            <span>支出</span>
+            <strong class="minus" id="mgExpense">¥0</strong>
+          </div>
+          <div class="bar-track"><div class="bar-fill minus" id="mgExpenseBar"></div></div>
+        </div>
+        <div class="mg-diff">
+          <span>差引</span>
+          <strong id="mgDiff">¥0</strong>
+        </div>
+      </section>
+
+      <section class="mg-card">
+        <div class="mg-card-title">カテゴリ別の支出</div>
+        <div class="pie-wrap">
+          <div class="pie" id="mgPie">
+            <div class="pie-hole">
+              <span id="mgPieLabel">支出合計</span>
+              <strong id="mgPieTotal">¥0</strong>
+            </div>
+          </div>
+        </div>
+        <table class="mg-table">
+          <thead>
+            <tr>
+              <th class="col-color">色</th>
+              <th>カテゴリ名</th>
+              <th class="num">予算</th>
+              <th class="num">金額</th>
+            </tr>
+          </thead>
+          <tbody id="mgTableBody"></tbody>
+          <tfoot id="mgTableFoot"></tfoot>
+        </table>
+      </section>
+
+    </div>
+  </section>
+
+  <!-- ========== 設定画面 ========== -->
+  <section class="view" id="view-settings">
+    <div class="container">
+      <h2 class="settings-title">設定</h2>
+
+      <div class="settings-card">
+        <div class="settings-card-title">カテゴリ</div>
+        <p class="settings-note">名前を変えると、そのカテゴリの予定もまとめて変わります。<br>削除しても、すでに登録した予定のカテゴリ表示は残ります。</p>
+        <ul class="cat-list" id="catList"></ul>
+        <button class="add-line-btn" id="settingsAddCat" type="button">＋ カテゴリを追加</button>
+      </div>
+
+      <div class="settings-card">
+        <div class="settings-card-title">バックアップ</div>
+        <p class="settings-note">予定・記録・カテゴリをJSONファイルに書き出します。<br>機種変更や別の端末へ移すときは、書き出したファイルを「復元」で読み込んでください。</p>
+        <label class="check-row">
+          <input type="checkbox" id="bkIncludePhotos" checked>
+          写真も含める
+        </label>
+        <div class="bk-actions">
+          <button class="bk-btn primary" id="bkExport" type="button">⬇ バックアップ（書き出し）</button>
+          <button class="bk-btn" id="bkImport" type="button">⬆ 復元（読み込み）</button>
+        </div>
+        <input id="bkFile" type="file" accept="application/json,.json" hidden>
+      </div>
+
+      <div class="settings-card">
+        <div class="settings-card-head">
+          <span class="settings-card-title">自動バックアップ</span>
+          <button class="switch" id="bkAutoToggle" type="button" role="switch" aria-checked="true" title="自動バックアップのオン／オフ"></button>
+        </div>
+        <p class="settings-note">アプリを開いている間、毎時0分に自動でバックアップします。<br>閉じていた間の分は、次に開いたときにすぐ作成します。</p>
+        <div class="bk-status" id="bkStatus"></div>
+        <div class="bk-folder" id="bkFolder"></div>
+        <div class="bk-list-title">ブラウザ内の自動バックアップ（最新24件・写真なし）</div>
+        <ul class="bk-list" id="bkList"></ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== タブバー ========== -->
+  <nav class="tabbar">
+    <button class="tab" type="button" data-view="view-calendar">
+      <span class="tab-icon">📅</span>
+      <span>カレンダー</span>
+    </button>
+    <button class="tab active" type="button" data-view="view-record">
+      <span class="tab-icon">✏️</span>
+      <span>記録</span>
+    </button>
+    <button class="tab" type="button" data-view="view-manage">
+      <span class="tab-icon">📊</span>
+      <span>管理</span>
+    </button>
+    <button class="tab" type="button" data-view="view-settings">
+      <span class="tab-icon">⚙️</span>
+      <span>設定</span>
+    </button>
+  </nav>
+
+  <!-- ========== 日付選択モーダル ========== -->
+  <div class="modal" id="datePicker">
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <div class="modal-title">日付を選択</div>
+      <div class="picker-row">
+        <select class="picker-select" id="pickYear" aria-label="年"></select>
+        <select class="picker-select" id="pickMonth" aria-label="月"></select>
+        <select class="picker-select" id="pickDay" aria-label="日"></select>
+      </div>
+      <div class="picker-preview" id="pickPreview"></div>
+      <div class="modal-actions">
+        <button class="modal-btn" id="pickCancel" type="button">キャンセル</button>
+        <button class="modal-btn" id="pickToday" type="button">今日</button>
+        <button class="modal-btn primary" id="pickApply" type="button">この日へ移動</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 追加種別の選択モーダル ========== -->
+  <div class="modal" id="choiceModal">
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <div class="modal-title">何を追加しますか？</div>
+      <button class="choice-btn" id="choiceEvent" type="button">
+        <span class="choice-icon">📌</span>
+        <span>
+          <span class="choice-label">予定の追加</span>
+          <span class="choice-sub">開始・終了日時、カテゴリ、予算など</span>
+        </span>
+      </button>
+      <button class="choice-btn" id="choiceRecord" type="button">
+        <span class="choice-icon">💴</span>
+        <span>
+          <span class="choice-label">収入・支出記録の追加</span>
+          <span class="choice-sub">日時を指定して記録、予定にも紐づけ可能</span>
+        </span>
+      </button>
+      <button class="modal-btn full" id="choiceCancel" type="button">キャンセル</button>
+    </div>
+  </div>
+
+  <!-- ========== 予定追加・編集モーダル ========== -->
+  <div class="modal" id="eventModal">
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <div class="modal-title" id="eventModalTitle">予定を追加</div>
+      <div class="form">
+        <label class="form-field">
+          <span class="form-label">開始日時</span>
+          <input class="form-input" id="evStartAt" type="datetime-local" min="2000-01-01T00:00">
+        </label>
+        <label class="form-field">
+          <span class="form-label">終了日時</span>
+          <input class="form-input" id="evEndAt" type="datetime-local" min="2000-01-01T00:00">
+        </label>
+        <div class="form-hint" id="evDuration"></div>
+        <label class="form-field">
+          <span class="form-label">題名<em>必須</em></span>
+          <input class="form-input" id="evTitle" type="text" autocomplete="off" enterkeyhint="done" placeholder="例：飲み会">
+        </label>
+        <div class="form-row">
+          <label class="form-field">
+            <span class="form-label">カテゴリ</span>
+            <select class="form-input" id="evCategory"></select>
+          </label>
+          <label class="form-field">
+            <span class="form-label">予算</span>
+            <div class="budget-wrap">
+              <span>¥</span>
+              <input class="form-input" id="evBudget" type="text" inputmode="numeric" autocomplete="off" placeholder="0">
+            </div>
+          </label>
+        </div>
+        <button class="text-btn" id="evAddCat" type="button">＋ カテゴリを追加</button>
+        <label class="form-field">
+          <span class="form-label">メモ</span>
+          <textarea class="form-input" id="evMemo" rows="3" placeholder="例：駅前の居酒屋、4人"></textarea>
+        </label>
+      </div>
+      <div class="modal-actions two spaced" id="evActions">
+        <button class="modal-btn danger" id="evDelete" type="button">削除</button>
+        <button class="modal-btn" id="evCancel" type="button">キャンセル</button>
+        <button class="modal-btn primary" id="evSave" type="button">追加する</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 収入・支出 追加・編集モーダル ========== -->
+  <div class="modal" id="recordModal">
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <div class="modal-title" id="recordModalTitle">収入・支出を記録</div>
+      <div class="form">
+        <label class="form-field">
+          <span class="form-label">日時</span>
+          <input class="form-input" id="recAt" type="datetime-local" min="2000-01-01T00:00">
+        </label>
+        <div class="seg">
+          <button class="seg-btn" type="button" data-type="minus">− 支出</button>
+          <button class="seg-btn" type="button" data-type="plus">＋ 収入</button>
+        </div>
+        <label class="form-field">
+          <span class="form-label">金額<em>必須</em></span>
+          <div class="budget-wrap">
+            <span>¥</span>
+            <input class="form-input" id="recAmount" type="text" inputmode="numeric" autocomplete="off" placeholder="0">
+          </div>
+        </label>
+        <label class="form-field">
+          <span class="form-label">メモ</span>
+          <input class="form-input" id="recMemo" type="text" autocomplete="off" enterkeyhint="done" placeholder="例：二次会">
+        </label>
+        <label class="form-field">
+          <span class="form-label">紐づけ先の予定</span>
+          <select class="form-input" id="recLink"></select>
+        </label>
+        <div class="form-hint left" id="recLinkHint"></div>
+      </div>
+      <div class="modal-actions two spaced" id="recActions">
+        <button class="modal-btn danger" id="recDelete" type="button">削除</button>
+        <button class="modal-btn" id="recCancel" type="button">キャンセル</button>
+        <button class="modal-btn primary" id="recSave" type="button">追加する</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== カテゴリ追加・名称変更モーダル ========== -->
+  <div class="modal top" id="categoryModal">
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <div class="modal-title" id="categoryModalTitle">カテゴリを追加</div>
+      <label class="form-field">
+        <span class="form-label">カテゴリ名</span>
+        <input class="form-input" id="catNameInput" type="text" autocomplete="off" enterkeyhint="done" maxlength="20" placeholder="例：交通費">
+      </label>
+      <div class="modal-actions two spaced">
+        <button class="modal-btn" id="catCancel" type="button">キャンセル</button>
+        <button class="modal-btn primary" id="catSave" type="button">保存する</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 復元の確認モーダル ========== -->
+  <div class="modal top" id="restoreModal">
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <div class="modal-title">このバックアップで復元しますか？</div>
+      <div class="restore-summary" id="restoreSummary"></div>
+      <p class="restore-warn">今のデータは、すべてこのバックアップの内容に置き換わります。<br>復元前の状態は、自動バックアップの一覧に「復元前」として残ります。</p>
+      <div class="modal-actions two spaced">
+        <button class="modal-btn" id="restoreCancel" type="button">キャンセル</button>
+        <button class="modal-btn primary" id="restoreApply" type="button">復元する</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 予定紐づけ確認モーダル（選択必須） ========== -->
+  <div class="modal top" id="linkModal" style="cursor: default;">
+    <div class="modal-card" role="alertdialog" aria-modal="true">
+      <div class="modal-title">予定に紐づけますか？</div>
+      <div class="link-info" id="linkInfo">
+        <div class="link-ev-title" id="linkEvTitle"></div>
+        <div class="link-ev-time" id="linkEvTime"></div>
+      </div>
+      <label class="form-field link-select-wrap" id="linkSelectWrap">
+        <span class="form-label" id="linkSelectLabel">紐づけ先の予定</span>
+        <select class="form-input" id="linkSelect"></select>
+      </label>
+      <div class="link-record" id="linkRecord"></div>
+      <div class="modal-actions two">
+        <button class="modal-btn" id="linkNo" type="button">いいえ</button>
+        <button class="modal-btn primary" id="linkYes" type="button">はい</button>
+      </div>
+      <div class="link-note">どちらかを選ぶと記録されます</div>
+    </div>
+  </div>
+
+  <div class="lightbox" id="lightbox">
+    <img id="lightboxImg" alt="拡大写真">
+    <div class="lightbox-caption" id="lightboxCaption"></div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // ===== 設定値 =====
+    const LOG_LIMIT = 5;
+    const PICKER_MIN_YEAR = 2000;
+    const PICKER_FUTURE_YEARS = 10;
+    const STORAGE_KEY = "bakusoku_kakeibo_v1";
+    const EVENTS_KEY = "bakusoku_kakeibo_events_v1";
+    const CATEGORIES_KEY = "bakusoku_kakeibo_categories_v1";
+    const PERIOD_KEY = "bakusoku_kakeibo_period";
+    const MANAGE_PERIOD_KEY = "bakusoku_kakeibo_manage_period";
+    const AUTO_BACKUP_KEY = "bakusoku_kakeibo_autobackup";
+    const BACKUP_APP = "bakusoku-kakeibo";
+    const AUTO_KEEP = 24;
+    const AUTO_FILE_PREFIX = "kakeibo_auto_";
+    const LATEST_FILE = "kakeibo_latest_with_photos.json";
+    const FS_SUPPORTED = typeof window.showDirectoryPicker === "function";
+    const DEFAULT_CATEGORIES = ["食事", "レジャー", "生活費", "その他"];
+    const UNCATEGORIZED = "カテゴリ未指定";
+    const UNCATEGORIZED_COLOR = "#9ca3af";
+    const CHART_COLORS = ["#16a34a", "#0ea5e9", "#f59e0b", "#8b5cf6", "#ec4899", "#14b8a6", "#f97316", "#6366f1", "#84cc16", "#ef4444"];
+    const REASON_LABELS = { auto: "自動", "auto-late": "自動（起動時）", "restore-before": "復元前", manual: "手動" };
+    const DAY_MS = 86400000;
+    const HOUR_MS = 3600000;
+    const JST_OFFSET = 9 * HOUR_MS;
+    const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
+
+    const $ = (id) => document.getElementById(id);
+
+    // iOS Safari で :active（押した瞬間の反応）を有効にする
+    document.addEventListener("touchstart", () => {}, { passive: true });
+
+    // ===== トースト =====
+    const toastEl = $("toast");
+    let toastTimer;
+
+    function showToast(message, isError) {
+      toastEl.textContent = message;
+      toastEl.classList.toggle("error", !!isError);
+      toastEl.classList.add("show");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toastEl.classList.remove("show"), isError ? 5000 : 1800);
+    }
+
+    window.addEventListener("error", (e) => {
+      showToast("エラー: " + e.message, true);
+    });
+
+    window.addEventListener("unhandledrejection", (e) => {
+      showToast("エラー: " + (e.reason && e.reason.message ? e.reason.message : e.reason), true);
+    });
+
+    function showWarning() {
+      $("warning").classList.add("show");
+    }
+
+    function shake(el) {
+      el.classList.remove("shake");
+      void el.offsetWidth;
+      el.classList.add("shake");
+      el.focus();
+    }
+
+    // ===== JST（日本標準時）ユーティリティ =====
+    function jstParts(ts) {
+      const d = new Date(ts + JST_OFFSET);
+      return {
+        y: d.getUTCFullYear(),
+        m: d.getUTCMonth(),
+        d: d.getUTCDate(),
+        dow: d.getUTCDay(),
+        h: d.getUTCHours(),
+        min: d.getUTCMinutes(),
+        s: d.getUTCSeconds()
+      };
+    }
+
+    function jstDayStart(ts) {
+      const p = jstParts(ts);
+      return Date.UTC(p.y, p.m, p.d) - JST_OFFSET;
+    }
+
+    function jstDate(y, m, d, h, min) {
+      return Date.UTC(y, m, d, h || 0, min || 0) - JST_OFFSET;
+    }
+
+    function daysInMonth(y, m) {
+      return new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+    }
+
+    function pad2(n) {
+      return String(n).padStart(2, "0");
+    }
+
+    function formatHM(ts) {
+      const p = jstParts(ts);
+      return pad2(p.h) + ":" + pad2(p.min);
+    }
+
+    function formatJST(ts) {
+      const p = jstParts(ts);
+      return p.y + "/" + pad2(p.m + 1) + "/" + pad2(p.d) + " " + pad2(p.h) + ":" + pad2(p.min) + ":" + pad2(p.s) + " JST";
+    }
+
+    function formatMD(ts) {
+      const p = jstParts(ts);
+      return (p.m + 1) + "/" + p.d + "(" + WEEKDAYS[p.dow] + ")";
+    }
+
+    // ファイル名用（例: 2026-11-01_1400）
+    function fileStamp(ts) {
+      const p = jstParts(ts);
+      return p.y + "-" + pad2(p.m + 1) + "-" + pad2(p.d) + "_" + pad2(p.h) + pad2(p.min);
+    }
+
+    // datetime-local 入出力（JST固定）
+    function toDTInput(ts) {
+      const p = jstParts(ts);
+      return p.y + "-" + pad2(p.m + 1) + "-" + pad2(p.d) + "T" + pad2(p.h) + ":" + pad2(p.min);
+    }
+
+    function parseDTInput(value) {
+      const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(value || "");
+      if (!m) return NaN;
+      return jstDate(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]));
+    }
+
+    function relativeDayLabel(dayStart) {
+      const diff = Math.round((dayStart - jstDayStart(Date.now())) / DAY_MS);
+      if (diff === 0) return "今日";
+      if (diff === -1) return "昨日";
+      if (diff === 1) return "明日";
+      return "";
+    }
+
+    function formatYen(value) {
+      const sign = value < 0 ? "-" : "";
+      return sign + "¥" + Math.abs(value).toLocaleString("ja-JP");
+    }
+
+    function formatSignedYen(value) {
+      if (value > 0) return "+¥" + value.toLocaleString("ja-JP");
+      return formatYen(value);
+    }
+
+    function formatRecordAmount(r) {
+      return (r.type === "plus" ? "+" : "−") + "¥" + r.amount.toLocaleString("ja-JP");
+    }
+
+    function formatDuration(ms) {
+      const totalMin = Math.round(ms / 60000);
+      const d = Math.floor(totalMin / 1440);
+      const h = Math.floor((totalMin % 1440) / 60);
+      const m = totalMin % 60;
+      return (d ? d + "日" : "") + (h ? h + "時間" : "") + (m ? m + "分" : "") || "0分";
+    }
+
+    // ===== 予定ユーティリティ =====
+    function getEventEnd(ev) {
+      return ev.endTimestamp || ev.timestamp + HOUR_MS;
+    }
+
+    function formatEventEnd(ev) {
+      const end = getEventEnd(ev);
+      return jstDayStart(end) === jstDayStart(ev.timestamp) ? formatHM(end) : formatMD(end) + " " + formatHM(end);
+    }
+
+    function formatEventRange(ev) {
+      return formatHM(ev.timestamp) + "〜" + formatEventEnd(ev);
+    }
+
+    function eventOptionLabel(ev) {
+      return ev.title + "（" + formatMD(ev.timestamp) + " " + formatEventRange(ev) + "）";
+    }
+
+    function findEvent(id) {
+      return id ? events.find((ev) => ev.id === id) || null : null;
+    }
+
+    function containsTime(ev, ts) {
+      return ev.timestamp <= ts && ts < getEventEnd(ev);
+    }
+
+    function findOngoingEvents(ts) {
+      return events
+        .filter((ev) => containsTime(ev, ts))
+        .sort((a, b) => b.timestamp - a.timestamp);
+    }
+
+    // 紐づけ候補：その日にかかる予定（時間内の予定を先頭）＋現在の紐づけ先
+    function getLinkCandidates(ts, includeId) {
+      const dayStart = jstDayStart(ts);
+      return events
+        .filter((ev) => ev.id === includeId || (ev.timestamp < dayStart + DAY_MS && getEventEnd(ev) > dayStart))
+        .sort((a, b) => {
+          const ca = containsTime(a, ts) ? 0 : 1;
+          const cb = containsTime(b, ts) ? 0 : 1;
+          return ca - cb || a.timestamp - b.timestamp;
+        });
+    }
+
+    function getLinkedSpent(eventId) {
+      return records
+        .filter((r) => r.eventId === eventId && r.type === "minus")
+        .reduce((total, r) => total + r.amount, 0);
+    }
+
+    // 記録のカテゴリ：紐づけ先予定のカテゴリ。紐づけなし等は「カテゴリ未指定」
+    function getRecordCategory(r) {
+      const ev = findEvent(r.eventId);
+      return ev && ev.category ? ev.category : UNCATEGORIZED;
+    }
+
+    // ===== 期間の範囲（JST基準・週は月曜始まり） =====
+    function getPeriodRange(period) {
+      const now = Date.now();
+      const today = jstDayStart(now);
+      const p = jstParts(now);
+
+      if (period === "day") {
+        return { start: today, end: today + DAY_MS, label: "今日の収支", range: formatMD(today) };
+      }
+      if (period === "week") {
+        const start = today - ((p.dow + 6) % 7) * DAY_MS;
+        return { start: start, end: start + 7 * DAY_MS, label: "今週の収支", range: formatMD(start) + "〜" + formatMD(start + 6 * DAY_MS) };
+      }
+      if (period === "month") {
+        return { start: jstDate(p.y, p.m, 1), end: jstDate(p.y, p.m + 1, 1), label: "今月の収支", range: p.y + "年" + (p.m + 1) + "月" };
+      }
+      return { start: -Infinity, end: Infinity, label: "全期間の収支", range: "累計残高" };
+    }
+
+    // 管理画面用：期間＋オフセット（0=今、-1=1つ前）
+    function relativeOffsetLabel(period, offset) {
+      const names = {
+        day: ["今日", "昨日", "明日", "日"],
+        week: ["今週", "先週", "来週", "週間"],
+        month: ["今月", "先月", "来月", "か月"]
+      }[period];
+      if (offset === 0) return names[0];
+      if (offset === -1) return names[1];
+      if (offset === 1) return names[2];
+      return Math.abs(offset) + names[3] + (offset < 0 ? "前" : "後");
+    }
+
+    function getManageRange(period, offset) {
+      const now = Date.now();
+      const today = jstDayStart(now);
+      const p = jstParts(now);
+      const back = offset !== 0 ? "・タップで戻る" : "";
+
+      if (period === "day") {
+        const start = today + offset * DAY_MS;
+        const sp = jstParts(start);
+        return {
+          start: start,
+          end: start + DAY_MS,
+          main: (sp.m + 1) + "月" + sp.d + "日（" + WEEKDAYS[sp.dow] + "）",
+          sub: sp.y + "年・" + relativeOffsetLabel(period, offset) + back
+        };
+      }
+      if (period === "week") {
+        const start = today - ((p.dow + 6) % 7) * DAY_MS + offset * 7 * DAY_MS;
+        return {
+          start: start,
+          end: start + 7 * DAY_MS,
+          main: formatMD(start) + "〜" + formatMD(start + 6 * DAY_MS),
+          sub: jstParts(start).y + "年・" + relativeOffsetLabel(period, offset) + back
+        };
+      }
+      if (period === "month") {
+        const start = jstDate(p.y, p.m + offset, 1);
+        const sp = jstParts(start);
+        return {
+          start: start,
+          end: jstDate(sp.y, sp.m + 1, 1),
+          main: sp.y + "年" + (sp.m + 1) + "月",
+          sub: relativeOffsetLabel(period, offset) + back
+        };
+      }
+      return { start: -Infinity, end: Infinity, main: "全期間", sub: "すべての記録・予定" };
+    }
+
+    // ===== タブ切り替え =====
+    const tabs = document.querySelectorAll(".tab");
+    const views = document.querySelectorAll(".view");
+
+    function switchView(viewId) {
+      const active = document.activeElement;
+      if (active && active !== document.body && typeof active.blur === "function") active.blur();
+
+      views.forEach((v) => v.classList.toggle("active", v.id === viewId));
+      tabs.forEach((t) => t.classList.toggle("active", t.dataset.view === viewId));
+      window.scrollTo(0, 0);
+      if (viewId === "view-calendar") {
+        renderCalendar();
+        scrollCalendarToFocus();
+      }
+      if (viewId === "view-manage") renderManage();
+      if (viewId === "view-settings") {
+        renderSettings();
+        renderBackupUI();
+      }
+    }
+
+    tabs.forEach((tab) => {
+      tab.addEventListener("click", () => switchView(tab.dataset.view));
+    });
+
+    // ===== ストレージ（localStorage／不可時はメモリ） =====
+    const storage = (() => {
+      let available = false;
+      const memory = {};
+
+      try {
+        window.localStorage.setItem("__kakeibo_test__", "1");
+        window.localStorage.removeItem("__kakeibo_test__");
+        available = true;
+      } catch (e) {
+        available = false;
+      }
+
+      return {
+        available: available,
+        get(key) {
+          if (!available) return memory[key] || null;
+          try {
+            return window.localStorage.getItem(key);
+          } catch (e) {
+            return memory[key] || null;
+          }
+        },
+        set(key, value) {
+          memory[key] = value;
+          if (!available) return;
+          try {
+            window.localStorage.setItem(key, value);
+          } catch (e) {
+            available = false;
+            showWarning();
+          }
+        }
+      };
+    })();
+
+    if (!storage.available) {
+      showWarning();
+    }
+
+    // ===== IndexedDB ストア（写真・自動バックアップ・フォルダ情報で共用／不可時はメモリ） =====
+    function createStore(dbName, storeName) {
+      const memory = new Map();
+      let dbPromise = null;
+
+      function open() {
+        if (dbPromise) return dbPromise;
+        dbPromise = new Promise((resolve) => {
+          try {
+            if (!window.indexedDB) {
+              resolve(null);
+              return;
+            }
+            const req = window.indexedDB.open(dbName, 1);
+            req.onupgradeneeded = () => {
+              req.result.createObjectStore(storeName);
+            };
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => resolve(null);
+            req.onblocked = () => resolve(null);
+          } catch (e) {
+            resolve(null);
+          }
+        });
+        return dbPromise;
+      }
+
+      function runTx(mode, action) {
+        return open().then((db) => {
+          if (!db) return null;
+          return new Promise((resolve) => {
+            try {
+              const tx = db.transaction(storeName, mode);
+              const req = action(tx.objectStore(storeName));
+              tx.oncomplete = () => resolve(req ? req.result : true);
+              tx.onerror = () => resolve(null);
+              tx.onabort = () => resolve(null);
+            } catch (e) {
+              resolve(null);
+            }
+          });
+        });
+      }
+
+      return {
+        open: open,
+        put(key, value) {
+          memory.set(key, value);
+          return runTx("readwrite", (store) => store.put(value, key));
+        },
+        get(key) {
+          if (memory.has(key)) return Promise.resolve(memory.get(key));
+          return runTx("readonly", (store) => store.get(key)).then((result) => {
+            if (result) memory.set(key, result);
+            return result || null;
+          });
+        },
+        remove(key) {
+          memory.delete(key);
+          return runTx("readwrite", (store) => store.delete(key));
+        },
+        clear() {
+          memory.clear();
+          return runTx("readwrite", (store) => store.clear());
+        },
+        // [キー, 値] の一覧
+        entries() {
+          return open().then((db) => {
+            if (!db) return Array.from(memory.entries());
+            return new Promise((resolve) => {
+              try {
+                const tx = db.transaction(storeName, "readonly");
+                const store = tx.objectStore(storeName);
+                const keysReq = store.getAllKeys();
+                const valuesReq = store.getAll();
+                tx.oncomplete = () => resolve(keysReq.result.map((k, i) => [k, valuesReq.result[i]]));
+                tx.onerror = () => resolve(Array.from(memory.entries()));
+              } catch (e) {
+                resolve(Array.from(memory.entries()));
+              }
+            });
+          });
+        }
+      };
+    }
+
+    const photoDB = createStore("bakusoku_kakeibo_photos", "photos");
+    const backupDB = createStore("bakusoku_kakeibo_backups", "snapshots");
+    const handleDB = createStore("bakusoku_kakeibo_handles", "handles");
+
+    photoDB.open().then((db) => {
+      if (!db) showWarning();
+    });
+
+    function loadList(key) {
+      try {
+        const data = JSON.parse(storage.get(key));
+        return Array.isArray(data) ? data : [];
+      } catch (e) {
+        return [];
+      }
+    }
+
+    function loadCategories() {
+      const list = loadList(CATEGORIES_KEY).filter((s) => typeof s === "string" && s.trim());
+      return list.length ? list : DEFAULT_CATEGORIES.slice();
+    }
+
+    function sortRecords() {
+      records.sort((a, b) => b.timestamp - a.timestamp);
+    }
+
+    function saveRecords() {
+      storage.set(STORAGE_KEY, JSON.stringify(records));
+    }
+
+    function saveEvents() {
+      storage.set(EVENTS_KEY, JSON.stringify(events));
+    }
+
+    function saveCategories() {
+      storage.set(CATEGORIES_KEY, JSON.stringify(categories));
+    }
+
+    function newId() {
+      return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    }
+
+    // ===== 状態 =====
+    const amountEl = $("amount");
+    const memoEl = $("memo");
+    const logListEl = $("logList");
+    const photoBtn = $("photoBtn");
+    const photoInput = $("photoInput");
+    const lightbox = $("lightbox");
+    const timelineEl = $("timeline");
+    const linkModal = $("linkModal");
+
+    let records = loadList(STORAGE_KEY);
+    let events = loadList(EVENTS_KEY);
+    let categories = loadCategories();
+    let lastAddedId = null;
+    let pendingPhoto = null;
+    let photoProcessing = false;
+    let pendingLink = null;
+    let editingEventId = null;
+    let editingRecordId = null;
+    let recType = "minus";
+    let categoryMode = null;
+    let currentPeriod = storage.get(PERIOD_KEY) || "month";
+    let managePeriod = storage.get(MANAGE_PERIOD_KEY) || "month";
+    let manageOffset = 0;
+    let calDay = jstDayStart(Date.now());
+
+    sortRecords();
+
+    // ===== 数値入力（全角・カンマ対応） =====
+    function parseAmount(raw) {
+      const normalized = String(raw)
+        .replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+        .replace(/[^0-9]/g, "");
+      return normalized ? parseInt(normalized, 10) : 0;
+    }
+
+    function attachNumberFormatter(input) {
+      let composingLocal = false;
+      const format = () => {
+        const value = parseAmount(input.value);
+        input.value = value ? value.toLocaleString("ja-JP") : "";
+      };
+      input.addEventListener("compositionstart", () => {
+        composingLocal = true;
+      });
+      input.addEventListener("compositionend", () => {
+        composingLocal = false;
+        format();
+      });
+      input.addEventListener("input", (e) => {
+        if (composingLocal || e.isComposing) return;
+        format();
+      });
+      return () => composingLocal;
+    }
+
+    const isAmountComposing = attachNumberFormatter(amountEl);
+    attachNumberFormatter($("evBudget"));
+    attachNumberFormatter($("recAmount"));
+
+    // ===== 写真 =====
+    function compressImage(file) {
+      return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+
+        img.onload = () => {
+          try {
+            const scale = Math.min(1, 1280 / Math.max(img.naturalWidth, img.naturalHeight));
+            const w = Math.round(img.naturalWidth * scale);
+            const h = Math.round(img.naturalHeight * scale);
+            const canvas = document.createElement("canvas");
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext("2d");
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(0, 0, w, h);
+            ctx.drawImage(img, 0, 0, w, h);
+            URL.revokeObjectURL(url);
+            resolve(canvas.toDataURL("image/jpeg", 0.75));
+          } catch (e) {
+            URL.revokeObjectURL(url);
+            reject(e);
+          }
+        };
+
+        img.onerror = () => {
+          URL.revokeObjectURL(url);
+          reject(new Error("この画像形式は読み込めません"));
+        };
+
+        img.src = url;
+      });
+    }
+
+    async function setPhotoFromFile(file) {
+      if (!file) return;
+      if (file.type && !file.type.startsWith("image/")) {
+        showToast("画像ファイルを選んでください", true);
+        return;
+      }
+      photoProcessing = true;
+      photoBtn.classList.add("loading");
+      try {
+        pendingPhoto = await compressImage(file);
+        updatePhotoPreview();
+      } catch (e) {
+        showToast("写真の読み込みに失敗しました: " + e.message, true);
+      } finally {
+        photoProcessing = false;
+        photoBtn.classList.remove("loading");
+      }
+    }
+
+    function updatePhotoPreview() {
+      const preview = $("photoPreview");
+      const img = $("photoPreviewImg");
+      if (pendingPhoto) {
+        img.src = pendingPhoto;
+        preview.classList.add("show");
+        photoBtn.classList.add("has-photo");
+      } else {
+        img.removeAttribute("src");
+        preview.classList.remove("show");
+        photoBtn.classList.remove("has-photo");
+      }
+    }
+
+    photoBtn.addEventListener("click", () => photoInput.click());
+
+    photoInput.addEventListener("change", () => {
+      setPhotoFromFile(photoInput.files && photoInput.files[0]);
+      photoInput.value = "";
+    });
+
+    $("photoRemove").addEventListener("click", () => {
+      pendingPhoto = null;
+      updatePhotoPreview();
+    });
+
+    document.addEventListener("paste", (e) => {
+      if (!$("view-record").classList.contains("active")) return;
+      if (document.querySelector(".modal.show")) return;
+      const files = e.clipboardData && e.clipboardData.files;
+      if (files && files.length > 0 && files[0].type.startsWith("image/")) {
+        e.preventDefault();
+        setPhotoFromFile(files[0]);
+      }
+    });
+
+    // ===== 記録（記録タブの爆速入力） =====
+    function addRecord(type) {
+      if (linkModal.classList.contains("show")) return;
+
+      if (photoProcessing) {
+        showToast("写真を処理中です。少し待ってください", true);
+        return;
+      }
+
+      const amount = parseAmount(amountEl.value);
+
+      if (!amount) {
+        shake(amountEl);
+        showToast("金額を入力してください", true);
+        return;
+      }
+
+      const record = {
+        id: newId(),
+        type: type,
+        amount: amount,
+        memo: memoEl.value.trim(),
+        hasPhoto: !!pendingPhoto,
+        eventId: null,
+        timestamp: Date.now()
+      };
+
+      const ongoing = findOngoingEvents(record.timestamp);
+
+      if (ongoing.length > 0) {
+        openLinkModal(record, pendingPhoto, ongoing);
+        return;
+      }
+
+      commitRecord(record, pendingPhoto);
+    }
+
+    function commitRecord(record, photo) {
+      if (photo) {
+        photoDB.put(record.id, photo).then((ok) => {
+          if (!ok) showWarning();
+        });
+      }
+
+      records.push(record);
+      sortRecords();
+      lastAddedId = record.id;
+      calDay = jstDayStart(record.timestamp);
+
+      render();
+      saveRecords();
+
+      amountEl.value = "";
+      memoEl.value = "";
+      pendingPhoto = null;
+      updatePhotoPreview();
+      amountEl.focus();
+
+      const linked = findEvent(record.eventId);
+      showToast(
+        (record.type === "plus" ? "＋" : "−") + "¥" + record.amount.toLocaleString("ja-JP") + " を記録しました" +
+        (record.hasPhoto ? " 📷" : "") +
+        (linked ? "（🔗 " + linked.title + "）" : "")
+      );
+
+      if (navigator.vibrate) {
+        try {
+          navigator.vibrate(30);
+        } catch (e) {
+          // 振動非対応環境は無視
+        }
+      }
+    }
+
+    function deleteRecord(id) {
+      const target = records.find((r) => r.id === id);
+      records = records.filter((r) => r.id !== id);
+      if (target && target.hasPhoto) photoDB.remove(id);
+      render();
+      saveRecords();
+    }
+
+    // ===== 紐づけ確認モーダル（はい／いいえ必須・複数時はプルダウン） =====
+    const linkSelect = $("linkSelect");
+
+    function openLinkModal(record, photo, candidates) {
+      pendingLink = { record: record, photo: photo, candidates: candidates };
+
+      if (candidates.length === 1) {
+        const ev = candidates[0];
+        $("linkInfo").style.display = "";
+        $("linkSelectWrap").style.display = "none";
+        $("linkEvTitle").textContent = ev.title;
+        $("linkEvTime").textContent = formatMD(ev.timestamp) + " " + formatEventRange(ev) + (ev.category ? "・" + ev.category : "");
+      } else {
+        $("linkInfo").style.display = "none";
+        $("linkSelectWrap").style.display = "";
+        $("linkSelectLabel").textContent = "紐づけ先の予定（進行中 " + candidates.length + "件）";
+        linkSelect.innerHTML = "";
+        candidates.forEach((ev) => {
+          const option = document.createElement("option");
+          option.value = ev.id;
+          option.textContent = eventOptionLabel(ev);
+          linkSelect.appendChild(option);
+        });
+        linkSelect.value = candidates[0].id;
+      }
+
+      const recordEl = $("linkRecord");
+      recordEl.innerHTML = "";
+      const amountSpan = document.createElement("span");
+      amountSpan.className = record.type === "plus" ? "plus" : "minus";
+      amountSpan.textContent = formatRecordAmount(record);
+      recordEl.appendChild(amountSpan);
+      if (record.memo) recordEl.appendChild(document.createTextNode("　" + record.memo));
+
+      openModal(linkModal);
+    }
+
+    function resolveLink(shouldLink) {
+      if (!pendingLink) return;
+      const link = pendingLink;
+      pendingLink = null;
+      closeModal(linkModal);
+      if (shouldLink) {
+        link.record.eventId = link.candidates.length === 1 ? link.candidates[0].id : linkSelect.value;
+      }
+      commitRecord(link.record, link.photo);
+    }
+
+    $("linkYes").addEventListener("click", () => resolveLink(true));
+    $("linkNo").addEventListener("click", () => resolveLink(false));
+
+    // ===== 2回タップ確認 =====
+    function armButton(button, armedLabel, normalLabel, onConfirm) {
+      if (button.classList.contains("armed")) {
+        clearTimeout(button._armTimer);
+        button.classList.remove("armed");
+        button.textContent = normalLabel;
+        onConfirm();
+        return;
+      }
+      button.classList.add("armed");
+      button.textContent = armedLabel;
+      button._armTimer = setTimeout(() => {
+        button.classList.remove("armed");
+        button.textContent = normalLabel;
+      }, 3000);
+    }
+
+    function resetArmed(button, normalLabel) {
+      clearTimeout(button._armTimer);
+      button.classList.remove("armed");
+      button.textContent = normalLabel;
+    }
+
+    // ===== 拡大表示 =====
+    function openLightbox(record) {
+      photoDB.get(record.id).then((src) => {
+        if (!src) {
+          showToast("写真が見つかりません", true);
+          return;
+        }
+        $("lightboxImg").src = src;
+        $("lightboxCaption").textContent =
+          formatRecordAmount(record) + (record.memo ? "　" + record.memo : "") + "\n" + formatJST(record.timestamp);
+        lightbox.classList.add("show");
+        updateBodyLock();
+      });
+    }
+
+    function closeLightbox() {
+      lightbox.classList.remove("show");
+      $("lightboxImg").removeAttribute("src");
+      updateBodyLock();
+    }
+
+    lightbox.addEventListener("click", closeLightbox);
+
+    function createThumb(record, className) {
+      const thumb = document.createElement("img");
+      thumb.className = className;
+      thumb.alt = "📷";
+      thumb.draggable = false;
+      photoDB.get(record.id).then((src) => {
+        if (src) thumb.src = src;
+      });
+      thumb.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openLightbox(record);
+      });
+      return thumb;
+    }
+
+    function sumRange(start, end) {
+      let income = 0;
+      let expense = 0;
+      records.forEach((r) => {
+        if (r.timestamp >= start && r.timestamp < end) {
+          if (r.type === "plus") income += r.amount;
+          else expense += r.amount;
+        }
+      });
+      return { income: income, expense: expense };
+    }
+
+    // ===== 描画：残高サマリー =====
+    function renderSummary() {
+      const range = getPeriodRange(currentPeriod);
+      const sum = sumRange(range.start, range.end);
+
+      document.querySelectorAll(".period-btn").forEach((b) => {
+        b.classList.toggle("active", b.dataset.period === currentPeriod);
+      });
+
+      $("summaryLabel").textContent = range.label;
+      $("summaryRange").textContent = range.range;
+      $("balance").textContent = formatSignedYen(sum.income - sum.expense);
+      $("periodIncome").textContent = formatYen(sum.income);
+      $("periodExpense").textContent = formatYen(sum.expense);
+    }
+
+    document.querySelectorAll(".period-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        currentPeriod = btn.dataset.period;
+        storage.set(PERIOD_KEY, currentPeriod);
+        renderSummary();
+      });
+    });
+
+    // ===== 描画：直近ログ =====
+    function renderLog() {
+      logListEl.innerHTML = "";
+
+      if (records.length === 0) {
+        $("logCount").textContent = "";
+        const empty = document.createElement("li");
+        empty.className = "empty-log";
+        empty.textContent = "まだ記録がありません";
+        logListEl.appendChild(empty);
+        return;
+      }
+
+      $("logCount").textContent = records.length > LOG_LIMIT
+        ? "（全" + records.length + "件中 " + LOG_LIMIT + "件）"
+        : "（" + records.length + "件）";
+
+      records.slice(0, LOG_LIMIT).forEach((r) => {
+        const li = document.createElement("li");
+        li.className = "log-item" + (r.type === "minus" ? " minus" : "") + (r.id === lastAddedId ? " new" : "");
+        li.title = "タップで編集";
+        li.addEventListener("click", () => openRecordModal(r));
+
+        if (r.hasPhoto) li.appendChild(createThumb(r, "log-thumb"));
+
+        const main = document.createElement("div");
+        main.className = "log-main";
+
+        const memo = document.createElement("div");
+        memo.className = "log-memo" + (r.memo ? "" : " empty");
+        memo.textContent = r.memo || (r.hasPhoto ? "（写真のみ）" : "（メモなし）");
+        main.appendChild(memo);
+
+        const linked = findEvent(r.eventId);
+        if (linked) {
+          const link = document.createElement("div");
+          link.className = "log-link";
+          link.textContent = "🔗 " + linked.title;
+          main.appendChild(link);
+        }
+
+        const time = document.createElement("div");
+        time.className = "log-time";
+        time.textContent = formatJST(r.timestamp);
+        main.appendChild(time);
+
+        const amount = document.createElement("div");
+        amount.className = "log-amount";
+        amount.textContent = formatRecordAmount(r);
+
+        const del = document.createElement("button");
+        del.className = "del-btn";
+        del.type = "button";
+        del.textContent = "×";
+        del.title = "2回タップで削除";
+        del.addEventListener("click", (e) => {
+          e.stopPropagation();
+          armButton(del, "削除", "×", () => deleteRecord(r.id));
+        });
+
+        li.append(main, amount, del);
+        logListEl.appendChild(li);
+      });
+    }
+
+    // ===== 描画：カレンダー（1日表示） =====
+    function getDayItems(dayStart) {
+      const inDay = (ts) => ts >= dayStart && ts < dayStart + DAY_MS;
+      const items = [];
+      records.forEach((r) => {
+        if (inDay(r.timestamp)) items.push({ kind: "record", data: r, ts: r.timestamp });
+      });
+      events.forEach((ev) => {
+        if (inDay(ev.timestamp)) items.push({ kind: "event", data: ev, ts: ev.timestamp });
+      });
+      return items.sort((a, b) => a.ts - b.ts);
+    }
+
+    function createRecordCard(r) {
+      const card = document.createElement("div");
+      card.className = "cal-card" + (r.type === "minus" ? " minus" : "");
+      card.title = "タップで編集";
+      card.addEventListener("click", () => openRecordModal(r));
+
+      const time = document.createElement("span");
+      time.className = "cal-card-time";
+      time.textContent = formatHM(r.timestamp);
+
+      const memo = document.createElement("span");
+      memo.className = "cal-card-memo";
+
+      const linked = findEvent(r.eventId);
+      if (linked) {
+        const badge = document.createElement("span");
+        badge.className = "link-badge";
+        badge.textContent = "🔗 " + linked.title;
+        memo.appendChild(badge);
+      }
+      memo.appendChild(document.createTextNode(r.memo || (r.hasPhoto ? "（写真のみ）" : "")));
+
+      const amount = document.createElement("span");
+      amount.className = "cal-card-amount";
+      amount.textContent = formatRecordAmount(r);
+
+      card.append(time, memo);
+      if (r.hasPhoto) card.appendChild(createThumb(r, "cal-card-thumb"));
+      card.appendChild(amount);
+      return card;
+    }
+
+    function createEventCard(ev) {
+      const card = document.createElement("div");
+      card.className = "ev-card";
+      card.title = "タップで編集";
+      card.addEventListener("click", () => openEventModal(ev));
+
+      const time = document.createElement("div");
+      time.className = "ev-time";
+      time.textContent = formatHM(ev.timestamp) + "\n〜\n" + formatEventEnd(ev);
+
+      const main = document.createElement("div");
+      main.className = "ev-main";
+
+      const title = document.createElement("div");
+      title.className = "ev-title";
+      title.textContent = ev.title;
+
+      const meta = document.createElement("div");
+      meta.className = "ev-meta";
+
+      const tag = document.createElement("span");
+      tag.className = "ev-tag";
+      tag.textContent = "予定";
+      meta.appendChild(tag);
+
+      if (ev.category) {
+        const cat = document.createElement("span");
+        cat.className = "ev-cat";
+        cat.textContent = ev.category;
+        meta.appendChild(cat);
+      }
+
+      const spent = getLinkedSpent(ev.id);
+      if (ev.budget || spent) {
+        const budget = document.createElement("span");
+        budget.className = "ev-budget" + (ev.budget && spent > ev.budget ? " over" : "");
+        budget.textContent = "使用 ¥" + spent.toLocaleString("ja-JP") + (ev.budget ? " / 予算 ¥" + ev.budget.toLocaleString("ja-JP") : "");
+        meta.appendChild(budget);
+      }
+
+      main.append(title, meta);
+
+      if (ev.memo) {
+        const memo = document.createElement("div");
+        memo.className = "ev-memo";
+        memo.textContent = ev.memo;
+        main.appendChild(memo);
+      }
+
+      const editIcon = document.createElement("span");
+      editIcon.className = "ev-edit-icon";
+      editIcon.textContent = "✎";
+
+      card.append(time, main, editIcon);
+      return card;
+    }
+
+    function renderCalendar() {
+      const p = jstParts(calDay);
+      const isToday = calDay === jstDayStart(Date.now());
+      const relative = relativeDayLabel(calDay);
+
+      $("calDateMain").textContent = (p.m + 1) + "月" + p.d + "日（" + WEEKDAYS[p.dow] + "）";
+      $("calDateSub").textContent = p.y + "年" + (relative ? "・" + relative : "");
+      $("calToday").style.visibility = isToday ? "hidden" : "visible";
+
+      const items = getDayItems(calDay);
+      const sum = sumRange(calDay, calDay + DAY_MS);
+      const budgetTotal = items
+        .filter((it) => it.kind === "event")
+        .reduce((total, it) => total + (it.data.budget || 0), 0);
+
+      $("calIncome").textContent = formatYen(sum.income);
+      $("calExpense").textContent = formatYen(sum.expense);
+      $("calBudget").textContent = formatYen(budgetTotal);
+
+      const nowHour = jstParts(Date.now()).h;
+      timelineEl.innerHTML = "";
+
+      for (let h = 0; h < 24; h++) {
+        const row = document.createElement("div");
+        row.className = "hour-row" + (isToday && h === nowHour ? " current" : "");
+
+        const label = document.createElement("div");
+        label.className = "hour-label";
+        label.textContent = h + ":00";
+
+        const slot = document.createElement("div");
+        slot.className = "hour-slot";
+
+        items
+          .filter((it) => jstParts(it.ts).h === h)
+          .forEach((it) => {
+            slot.appendChild(it.kind === "event" ? createEventCard(it.data) : createRecordCard(it.data));
+          });
+
+        row.append(label, slot);
+        timelineEl.appendChild(row);
+      }
+
+      positionNowLine();
+    }
+
+    function positionNowLine() {
+      const old = timelineEl.querySelector(".now-line");
+      if (old) old.remove();
+      if (calDay !== jstDayStart(Date.now())) return;
+      if (!$("view-calendar").classList.contains("active")) return;
+
+      const now = jstParts(Date.now());
+      const row = timelineEl.children[now.h];
+      if (!row) return;
+
+      const line = document.createElement("div");
+      line.className = "now-line";
+      line.style.top = (row.offsetTop + row.offsetHeight * (now.min / 60)) + "px";
+      timelineEl.appendChild(line);
+    }
+
+    function scrollCalendarToFocus(focusHour) {
+      let hour = 8;
+
+      if (typeof focusHour === "number") {
+        hour = focusHour;
+      } else if (calDay === jstDayStart(Date.now())) {
+        hour = Math.max(0, jstParts(Date.now()).h - 1);
+      } else {
+        const first = getDayItems(calDay)[0];
+        if (first) hour = jstParts(first.ts).h;
+      }
+
+      const row = timelineEl.children[hour];
+      if (!row) return;
+      const headerHeight = $("calHeader").offsetHeight;
+      const top = row.getBoundingClientRect().top + window.scrollY - headerHeight - 8;
+      window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+    }
+
+    function goToDay(dayStart, focusHour) {
+      calDay = dayStart;
+      renderCalendar();
+      window.scrollTo(0, 0);
+      scrollCalendarToFocus(focusHour);
+    }
+
+    $("calPrev").addEventListener("click", () => goToDay(calDay - DAY_MS));
+    $("calNext").addEventListener("click", () => goToDay(calDay + DAY_MS));
+    $("calToday").addEventListener("click", () => goToDay(jstDayStart(Date.now())));
+
+    // ===== 描画：管理（棒グラフ・円グラフ・カテゴリ一覧） =====
+    function buildColorMap(names) {
+      const map = {};
+      let extra = categories.length;
+      names.forEach((name) => {
+        if (name === UNCATEGORIZED) {
+          map[name] = UNCATEGORIZED_COLOR;
+          return;
+        }
+        const index = categories.indexOf(name);
+        map[name] = CHART_COLORS[(index >= 0 ? index : extra++) % CHART_COLORS.length];
+      });
+      return map;
+    }
+
+    function createCell(className, text) {
+      const td = document.createElement("td");
+      if (className) td.className = className;
+      if (text !== undefined) td.textContent = text;
+      return td;
+    }
+
+    function renderManage() {
+      const range = getManageRange(managePeriod, manageOffset);
+      const inRange = (ts) => ts >= range.start && ts < range.end;
+
+      document.querySelectorAll(".mg-period-btn").forEach((b) => {
+        b.classList.toggle("active", b.dataset.period === managePeriod);
+      });
+
+      $("mgRangeMain").textContent = range.main;
+      $("mgRangeSub").textContent = range.sub;
+      const navVisibility = managePeriod === "all" ? "hidden" : "visible";
+      $("mgPrev").style.visibility = navVisibility;
+      $("mgNext").style.visibility = navVisibility;
+
+      // --- 収入・支出の棒グラフ ---
+      const sum = sumRange(range.start, range.end);
+      const max = Math.max(sum.income, sum.expense);
+      const diff = sum.income - sum.expense;
+
+      $("mgIncome").textContent = formatYen(sum.income);
+      $("mgExpense").textContent = formatYen(sum.expense);
+      $("mgIncomeBar").style.width = (max ? (sum.income / max) * 100 : 0) + "%";
+      $("mgExpenseBar").style.width = (max ? (sum.expense / max) * 100 : 0) + "%";
+      $("mgDiff").textContent = formatSignedYen(diff);
+      $("mgDiff").style.color = diff < 0 ? "var(--minus)" : "var(--green)";
+
+      // --- カテゴリ別集計（支出＋予算） ---
+      const stats = {};
+      const ensure = (name) => stats[name] || (stats[name] = { name: name, amount: 0, budget: 0 });
+
+      records.forEach((r) => {
+        if (r.type === "minus" && inRange(r.timestamp)) {
+          ensure(getRecordCategory(r)).amount += r.amount;
+        }
+      });
+
+      events.forEach((ev) => {
+        if (ev.budget && inRange(ev.timestamp)) {
+          ensure(ev.category || UNCATEGORIZED).budget += ev.budget;
+        }
+      });
+
+      const rows = Object.keys(stats)
+        .map((key) => stats[key])
+        .sort((a, b) => b.amount - a.amount || b.budget - a.budget);
+
+      const colors = buildColorMap(rows.map((row) => row.name));
+      const totalAmount = rows.reduce((t, row) => t + row.amount, 0);
+      const totalBudget = rows.reduce((t, row) => t + row.budget, 0);
+
+      // --- 円グラフ（conic-gradient） ---
+      const pie = $("mgPie");
+      if (totalAmount > 0) {
+        let acc = 0;
+        const stops = rows
+          .filter((row) => row.amount > 0)
+          .map((row) => {
+            const from = (acc / totalAmount) * 100;
+            acc += row.amount;
+            const to = (acc / totalAmount) * 100;
+            return colors[row.name] + " " + from + "% " + to + "%";
+          });
+        pie.style.background = "conic-gradient(" + stops.join(", ") + ")";
+        $("mgPieLabel").textContent = "支出合計";
+      } else {
+        pie.style.background = "#e5efe8";
+        $("mgPieLabel").textContent = "支出なし";
+      }
+      $("mgPieTotal").textContent = formatYen(totalAmount);
+
+      // --- 一覧（色・カテゴリ名・予算・金額） ---
+      const body = $("mgTableBody");
+      const foot = $("mgTableFoot");
+      body.innerHTML = "";
+      foot.innerHTML = "";
+
+      if (rows.length === 0) {
+        const tr = document.createElement("tr");
+        tr.className = "mg-empty";
+        const td = createCell("", "この期間の支出・予算はありません");
+        td.colSpan = 4;
+        tr.appendChild(td);
+        body.appendChild(tr);
+        return;
+      }
+
+      rows.forEach((row) => {
+        const tr = document.createElement("tr");
+
+        const colorTd = createCell("col-color");
+        const swatch = document.createElement("span");
+        swatch.className = "swatch";
+        swatch.style.background = colors[row.name];
+        colorTd.appendChild(swatch);
+
+        const nameTd = createCell("");
+        const name = document.createElement("span");
+        name.className = "mg-cat-name";
+        name.textContent = row.name;
+        const pct = document.createElement("span");
+        pct.className = "mg-pct";
+        pct.textContent = totalAmount ? Math.round((row.amount / totalAmount) * 1000) / 10 + "%" : "0%";
+        nameTd.append(name, pct);
+
+        const budgetTd = row.budget
+          ? createCell("num", formatYen(row.budget))
+          : createCell("num mg-dash", "—");
+
+        const over = row.budget > 0 && row.amount > row.budget;
+        const amountTd = createCell("num" + (over ? " mg-over" : ""), formatYen(row.amount));
+
+        tr.append(colorTd, nameTd, budgetTd, amountTd);
+        body.appendChild(tr);
+      });
+
+      const totalTr = document.createElement("tr");
+      totalTr.append(
+        createCell("col-color", ""),
+        createCell("", "合計"),
+        createCell("num", totalBudget ? formatYen(totalBudget) : "—"),
+        createCell("num" + (totalBudget > 0 && totalAmount > totalBudget ? " mg-over" : ""), formatYen(totalAmount))
+      );
+      foot.appendChild(totalTr);
+    }
+
+    document.querySelectorAll(".mg-period-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        managePeriod = btn.dataset.period;
+        manageOffset = 0;
+        storage.set(MANAGE_PERIOD_KEY, managePeriod);
+        renderManage();
+      });
+    });
+
+    $("mgPrev").addEventListener("click", () => {
+      manageOffset -= 1;
+      renderManage();
+    });
+
+    $("mgNext").addEventListener("click", () => {
+      manageOffset += 1;
+      renderManage();
+    });
+
+    $("mgRange").addEventListener("click", () => {
+      if (manageOffset === 0) return;
+      manageOffset = 0;
+      renderManage();
+    });
+
+    // ===== 描画：設定（カテゴリ一覧） =====
+    function renderSettings() {
+      const list = $("catList");
+      list.innerHTML = "";
+
+      categories.forEach((name) => {
+        const li = document.createElement("li");
+        li.className = "cat-item";
+
+        const label = document.createElement("span");
+        label.className = "cat-name";
+        label.textContent = name;
+
+        const count = document.createElement("span");
+        count.className = "cat-count";
+        count.textContent = "予定 " + events.filter((ev) => ev.category === name).length + "件";
+
+        const rename = document.createElement("button");
+        rename.className = "icon-btn";
+        rename.type = "button";
+        rename.textContent = "✎";
+        rename.title = "名前を変更";
+        rename.addEventListener("click", () => openCategoryModal({ type: "rename", oldName: name }));
+
+        const del = document.createElement("button");
+        del.className = "icon-btn danger";
+        del.type = "button";
+        del.textContent = "削除";
+        del.addEventListener("click", () => {
+          armButton(del, "もう一度", "削除", () => deleteCategory(name));
+        });
+
+        li.append(label, count, rename, del);
+        list.appendChild(li);
+      });
+    }
+
+    // ===== バックアップ：作成・書き出し =====
+    function cloneJSON(value) {
+      return JSON.parse(JSON.stringify(value));
+    }
+
+    async function buildBackup(includePhotos, reason) {
+      const now = Date.now();
+      const backup = {
+        app: BACKUP_APP,
+        version: 1,
+        createdAt: now,
+        createdAtJST: formatJST(now),
+        reason: reason || "manual",
+        data: cloneJSON({
+          records: records,
+          events: events,
+          categories: categories,
+          settings: { period: currentPeriod, managePeriod: managePeriod }
+        })
+      };
+
+      if (includePhotos) {
+        const ids = new Set(records.filter((r) => r.hasPhoto).map((r) => r.id));
+        const photos = {};
+        (await photoDB.entries()).forEach((entry) => {
+          if (ids.has(entry[0]) && typeof entry[1] === "string") photos[entry[0]] = entry[1];
+        });
+        backup.photos = photos;
+      }
+
+      return backup;
+    }
+
+    function downloadJSON(obj, filename) {
+      const blob = new Blob([JSON.stringify(obj, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    }
+
+    // ブラウザ内（IndexedDB）に保存し、最新 AUTO_KEEP 件だけ残す
+    async function createSnapshot(reason) {
+      const snapshot = await buildBackup(false, reason);
+      await backupDB.put(snapshot.createdAt, snapshot);
+      const all = (await backupDB.entries()).sort((a, b) => b[0] - a[0]);
+      for (const entry of all.slice(AUTO_KEEP)) {
+        await backupDB.remove(entry[0]);
+      }
+      return snapshot;
+    }
+
+    $("bkExport").addEventListener("click", async () => {
+      const button = $("bkExport");
+      button.disabled = true;
+      try {
+        const backup = await buildBackup($("bkIncludePhotos").checked, "manual");
+        downloadJSON(backup, "kakeibo_backup_" + fileStamp(backup.createdAt) + ".json");
+        showToast("バックアップを書き出しました");
+      } catch (e) {
+        showToast("書き出しに失敗しました: " + e.message, true);
+      } finally {
+        button.disabled = false;
+      }
+    });
+
+    // ===== バックアップ：復元 =====
+    const restoreModal = $("restoreModal");
+    let pendingRestore = null;
+
+    function normalizeBackup(obj) {
+      const data = obj && obj.data ? obj.data : obj;
+      if (!data || !Array.isArray(data.records) || !Array.isArray(data.events)) {
+        throw new Error("爆速家計簿のバックアップファイルではありません");
+      }
+
+      const recs = data.records.filter((r) =>
+        r && typeof r.id === "string" && typeof r.amount === "number" &&
+        typeof r.timestamp === "number" && (r.type === "plus" || r.type === "minus")
+      );
+      const evs = data.events.filter((ev) =>
+        ev && typeof ev.id === "string" && typeof ev.title === "string" && typeof ev.timestamp === "number"
+      );
+      const cats = Array.isArray(data.categories)
+        ? data.categories.filter((c) => typeof c === "string" && c.trim())
+        : [];
+      const photos = obj.photos && typeof obj.photos === "object" ? obj.photos : null;
+
+      return {
+        createdAt: typeof obj.createdAt === "number" ? obj.createdAt : null,
+        reason: obj.reason || "",
+        records: recs,
+        events: evs,
+        categories: cats,
+        settings: data.settings && typeof data.settings === "object" ? data.settings : {},
+        photos: photos
+      };
+    }
+
+    function openRestoreModal(backup, sourceLabel) {
+      pendingRestore = backup;
+      const summary = $("restoreSummary");
+      summary.innerHTML = "";
+
+      const lines = [
+        ["元データ", sourceLabel],
+        ["作成日時", backup.createdAt ? formatJST(backup.createdAt) : "不明"],
+        ["記録", backup.records.length + "件"],
+        ["予定", backup.events.length + "件"],
+        ["カテゴリ", (backup.categories.length || DEFAULT_CATEGORIES.length) + "件"],
+        ["写真", backup.photos ? Object.keys(backup.photos).length + "枚" : "含まない（今の写真をそのまま使用）"]
+      ];
+
+      lines.forEach((line) => {
+        const row = document.createElement("div");
+        row.appendChild(document.createTextNode(line[0] + "："));
+        const strong = document.createElement("strong");
+        strong.textContent = line[1];
+        row.appendChild(strong);
+        summary.appendChild(row);
+      });
+
+      $("restoreApply").disabled = false;
+      openModal(restoreModal);
+    }
+
+    async function applyRestore(backup) {
+      await createSnapshot("restore-before");
+
+      records = cloneJSON(backup.records);
+      events = cloneJSON(backup.events);
+      categories = backup.categories.length ? backup.categories.slice() : DEFAULT_CATEGORIES.slice();
+
+      if (["day", "week", "month", "all"].includes(backup.settings.period)) {
+        currentPeriod = backup.settings.period;
+        storage.set(PERIOD_KEY, currentPeriod);
+      }
+      if (["day", "week", "month", "all"].includes(backup.settings.managePeriod)) {
+        managePeriod = backup.settings.managePeriod;
+        storage.set(MANAGE_PERIOD_KEY, managePeriod);
+      }
+
+      // 写真入りのバックアップなら写真も置き換え。写真なしなら今の写真を残す
+      if (backup.photos) {
+        await photoDB.clear();
+        for (const id of Object.keys(backup.photos)) {
+          const src = backup.photos[id];
+          if (typeof src === "string" && src.startsWith("data:image/")) await photoDB.put(id, src);
+        }
+      }
+
+      sortRecords();
+      saveRecords();
+      saveEvents();
+      saveCategories();
+
+      calDay = jstDayStart(Date.now());
+      manageOffset = 0;
+      render();
+      renderSettings();
+      renderBackupUI();
+    }
+
+    $("bkImport").addEventListener("click", () => $("bkFile").click());
+
+    $("bkFile").addEventListener("change", async () => {
+      const input = $("bkFile");
+      const file = input.files && input.files[0];
+      input.value = "";
+      if (!file) return;
+
+      try {
+        const backup = normalizeBackup(JSON.parse(await file.text()));
+        openRestoreModal(backup, file.name);
+      } catch (e) {
+        showToast("読み込めませんでした: " + (e instanceof SyntaxError ? "JSONファイルではありません" : e.message), true);
+      }
+    });
+
+    $("restoreCancel").addEventListener("click", () => {
+      pendingRestore = null;
+      closeModal(restoreModal);
+    });
+
+    $("restoreApply").addEventListener("click", async () => {
+      if (!pendingRestore) return;
+      const button = $("restoreApply");
+      button.disabled = true;
+      try {
+        await applyRestore(pendingRestore);
+        pendingRestore = null;
+        closeModal(restoreModal);
+        showToast("復元しました");
+      } catch (e) {
+        button.disabled = false;
+        showToast("復元に失敗しました: " + e.message, true);
+      }
+    });
+
+    // ===== 自動バックアップ（毎時0分・JST） =====
+    let autoState = (() => {
+      try {
+        const saved = JSON.parse(storage.get(AUTO_BACKUP_KEY));
+        if (saved && typeof saved === "object") return Object.assign({ enabled: true, lastSlot: 0, lastAt: 0 }, saved);
+      } catch (e) {
+        // 初回は既定値
+      }
+      return { enabled: true, lastSlot: 0, lastAt: 0 };
+    })();
+    let autoTimer = null;
+    let autoRunning = false;
+    let dirHandle = null;
+
+    function saveAutoState() {
+      storage.set(AUTO_BACKUP_KEY, JSON.stringify(autoState));
+    }
+
+    // 日本時間は UTC+9 の整数時間なので、UTC の正時 ＝ JST の正時
+    function currentSlot() {
+      return Math.floor(Date.now() / HOUR_MS) * HOUR_MS;
+    }
+
+    async function getFolderPermission() {
+      if (!dirHandle) return "none";
+      try {
+        return await dirHandle.queryPermission({ mode: "readwrite" });
+      } catch (e) {
+        return "denied";
+      }
+    }
+
+    async function writeFolderFile(name, text) {
+      const fileHandle = await dirHandle.getFileHandle(name, { create: true });
+      const writable = await fileHandle.createWritable();
+      await writable.write(text);
+      await writable.close();
+    }
+
+    // フォルダに「毎時ファイル（写真なし）」と「最新版（写真込み・上書き）」を保存
+    async function writeFolderFiles(snapshot) {
+      if (!dirHandle || (await getFolderPermission()) !== "granted") return false;
+      try {
+        await writeFolderFile(AUTO_FILE_PREFIX + fileStamp(snapshot.createdAt) + ".json", JSON.stringify(snapshot, null, 2));
+        const full = await buildBackup(true, snapshot.reason);
+        await writeFolderFile(LATEST_FILE, JSON.stringify(full));
+
+        const names = [];
+        for await (const entry of dirHandle.entries()) {
+          const name = entry[0];
+          if (name.startsWith(AUTO_FILE_PREFIX) && name.endsWith(".json")) names.push(name);
+        }
+        names.sort();
+        while (names.length > AUTO_KEEP) {
+          await dirHandle.removeEntry(names.shift());
+        }
+        return true;
+      } catch (e) {
+        showToast("フォルダへの保存に失敗しました: " + e.message, true);
+        return false;
+      }
+    }
+
+    async function runAutoBackupIfDue() {
+      clearTimeout(autoTimer);
+
+      if (autoState.enabled && !autoRunning && autoState.lastSlot < currentSlot()) {
+        autoRunning = true;
+        try {
+          const slot = currentSlot();
+          const onTime = Date.now() - slot < 2 * 60000;
+          autoState.lastSlot = slot;
+          autoState.lastAt = Date.now();
+          saveAutoState();
+          const snapshot = await createSnapshot(onTime ? "auto" : "auto-late");
+          await writeFolderFiles(snapshot);
+        } catch (e) {
+          showToast("自動バックアップに失敗しました: " + e.message, true);
+        } finally {
+          autoRunning = false;
+        }
+        if ($("view-settings").classList.contains("active")) renderBackupUI();
+      }
+
+      // 次の正時（＋1秒）に再実行
+      if (autoState.enabled) {
+        autoTimer = setTimeout(runAutoBackupIfDue, currentSlot() + HOUR_MS - Date.now() + 1000);
+      }
+    }
+
+    // 画面に戻ってきたとき（スリープ復帰など）に取りこぼしを確認
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") runAutoBackupIfDue();
+    });
+
+    $("bkAutoToggle").addEventListener("click", () => {
+      autoState.enabled = !autoState.enabled;
+      saveAutoState();
+      if (autoState.enabled) {
+        runAutoBackupIfDue();
+        showToast("自動バックアップをオンにしました");
+      } else {
+        clearTimeout(autoTimer);
+        showToast("自動バックアップをオフにしました");
+      }
+      renderBackupUI();
+    });
+
+    // ===== 自動バックアップ：保存先フォルダ（パソコンの Chrome / Edge） =====
+    async function chooseFolder() {
+      try {
+        dirHandle = await window.showDirectoryPicker({ mode: "readwrite" });
+        await handleDB.put("dir", dirHandle);
+        const snapshot = await buildBackup(false, "auto");
+        if (await writeFolderFiles(snapshot)) showToast("「" + dirHandle.name + "」に保存しました");
+      } catch (e) {
+        if (e && e.name !== "AbortError") showToast("フォルダを設定できませんでした: " + e.message, true);
+      }
+      renderBackupUI();
+    }
+
+    async function resumeFolder() {
+      try {
+        const permission = await dirHandle.requestPermission({ mode: "readwrite" });
+        if (permission === "granted") {
+          const snapshot = await buildBackup(false, "auto");
+          if (await writeFolderFiles(snapshot)) showToast("フォルダへの保存を再開しました");
+        }
+      } catch (e) {
+        showToast("許可できませんでした: " + e.message, true);
+      }
+      renderBackupUI();
+    }
+
+    async function clearFolder() {
+      dirHandle = null;
+      await handleDB.remove("dir");
+      showToast("フォルダへの保存を解除しました");
+      renderBackupUI();
+    }
+
+    function makeSmallButton(label, onClick, danger) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "icon-btn" + (danger ? " danger" : "");
+      button.textContent = label;
+      button.addEventListener("click", onClick);
+      return button;
+    }
+
+    async function renderFolderArea() {
+      const area = $("bkFolder");
+      const text = document.createElement("div");
+      text.className = "bk-folder-text";
+      const buttons = [];
+
+      if (!FS_SUPPORTED) {
+        text.textContent = "📁 フォルダへの自動保存は、パソコンのChrome・Edgeで使えます。この端末ではブラウザ内に保存します。";
+      } else if (!dirHandle) {
+        text.textContent = "📁 保存先フォルダを選ぶと、毎時JSONファイルとしても自動保存します。";
+        buttons.push(makeSmallButton("フォルダを選ぶ", chooseFolder));
+      } else if ((await getFolderPermission()) === "granted") {
+        text.textContent = "📁「" + dirHandle.name + "」にも保存中";
+        buttons.push(makeSmallButton("解除", clearFolder, true));
+      } else {
+        text.className = "bk-folder-text warn";
+        text.textContent = "⚠「" + dirHandle.name + "」への保存が止まっています（開き直したあとは許可が必要です）";
+        buttons.push(makeSmallButton("許可して再開", resumeFolder));
+        buttons.push(makeSmallButton("解除", clearFolder, true));
+      }
+
+      area.innerHTML = "";
+      area.appendChild(text);
+      buttons.forEach((b) => area.appendChild(b));
+    }
+
+    async function renderBackupUI() {
+      const toggle = $("bkAutoToggle");
+      toggle.classList.toggle("on", autoState.enabled);
+      toggle.setAttribute("aria-checked", autoState.enabled ? "true" : "false");
+
+      const status = $("bkStatus");
+      status.classList.toggle("off", !autoState.enabled);
+      if (autoState.enabled) {
+        const next = currentSlot() + HOUR_MS;
+        status.textContent = "次回 " + formatMD(next) + " " + formatHM(next) +
+          (autoState.lastAt ? "　／　前回 " + formatMD(autoState.lastAt) + " " + formatHM(autoState.lastAt) : "");
+      } else {
+        status.textContent = "自動バックアップは停止中です";
+      }
+
+      await renderFolderArea();
+
+      const snapshots = (await backupDB.entries())
+        .map((entry) => entry[1])
+        .filter((s) => s && typeof s.createdAt === "number")
+        .sort((a, b) => b.createdAt - a.createdAt);
+
+      const list = $("bkList");
+      list.innerHTML = "";
+
+      if (snapshots.length === 0) {
+        const empty = document.createElement("li");
+        empty.className = "bk-empty";
+        empty.textContent = "まだ自動バックアップはありません";
+        list.appendChild(empty);
+        return;
+      }
+
+      snapshots.forEach((snapshot) => {
+        const li = document.createElement("li");
+        li.className = "bk-item";
+
+        const main = document.createElement("div");
+        main.className = "bk-item-main";
+
+        const time = document.createElement("div");
+        time.className = "bk-item-time";
+        time.textContent = formatMD(snapshot.createdAt) + " " + formatHM(snapshot.createdAt);
+
+        const data = snapshot.data || {};
+        const meta = document.createElement("div");
+        meta.className = "bk-item-meta";
+        meta.textContent = (REASON_LABELS[snapshot.reason] || "自動") +
+          "・記録" + (data.records || []).length + "件・予定" + (data.events || []).length + "件";
+
+        main.append(time, meta);
+
+        const exportBtn = makeSmallButton("書き出し", () => {
+          downloadJSON(snapshot, "kakeibo_" + (snapshot.reason || "auto") + "_" + fileStamp(snapshot.createdAt) + ".json");
+          showToast("書き出しました（写真なし）");
+        });
+
+        const restoreBtn = makeSmallButton("復元", () => {
+          try {
+            openRestoreModal(normalizeBackup(snapshot), "自動バックアップ（" + formatMD(snapshot.createdAt) + " " + formatHM(snapshot.createdAt) + "）");
+          } catch (e) {
+            showToast("このバックアップは使えません: " + e.message, true);
+          }
+        });
+
+        li.append(main, exportBtn, restoreBtn);
+        list.appendChild(li);
+      });
+    }
+
+    // ===== モーダル共通 =====
+    function updateBodyLock() {
+      document.body.classList.toggle("modal-open", !!document.querySelector(".modal.show, .lightbox.show"));
+    }
+
+    function openModal(modal) {
+      // 開く前に入力中のキーボードを閉じる（必要な入力欄はこのあと同期的にフォーカス）
+      const active = document.activeElement;
+      if (active && active !== document.body && typeof active.blur === "function") active.blur();
+      modal.classList.add("show");
+      updateBodyLock();
+    }
+
+    function closeModal(modal) {
+      modal.classList.remove("show");
+      updateBodyLock();
+    }
+
+    // ===== 日付選択モーダル =====
+    const pickerModal = $("datePicker");
+    const pickYear = $("pickYear");
+    const pickMonth = $("pickMonth");
+    const pickDay = $("pickDay");
+
+    function fillSelect(select, from, to, suffix, selected) {
+      select.innerHTML = "";
+      for (let v = from; v <= to; v++) {
+        const option = document.createElement("option");
+        option.value = v;
+        option.textContent = v + suffix;
+        if (v === selected) option.selected = true;
+        select.appendChild(option);
+      }
+    }
+
+    function refreshDayOptions(preferredDay) {
+      const y = Number(pickYear.value);
+      const m = Number(pickMonth.value) - 1;
+      const max = daysInMonth(y, m);
+      fillSelect(pickDay, 1, max, "日", Math.min(preferredDay, max));
+    }
+
+    function getPickedDay() {
+      return jstDate(Number(pickYear.value), Number(pickMonth.value) - 1, Number(pickDay.value));
+    }
+
+    function updatePickPreview() {
+      const ts = getPickedDay();
+      const p = jstParts(ts);
+      const relative = relativeDayLabel(ts);
+      $("pickPreview").textContent =
+        p.y + "年" + (p.m + 1) + "月" + p.d + "日（" + WEEKDAYS[p.dow] + "）" + (relative ? "・" + relative : "");
+    }
+
+    function openDatePicker() {
+      const p = jstParts(calDay);
+      const thisYear = jstParts(Date.now()).y;
+      fillSelect(pickYear, Math.min(PICKER_MIN_YEAR, p.y), Math.max(thisYear + PICKER_FUTURE_YEARS, p.y), "年", p.y);
+      fillSelect(pickMonth, 1, 12, "月", p.m + 1);
+      refreshDayOptions(p.d);
+      updatePickPreview();
+      openModal(pickerModal);
+    }
+
+    [pickYear, pickMonth].forEach((select) => {
+      select.addEventListener("change", () => {
+        refreshDayOptions(Number(pickDay.value));
+        updatePickPreview();
+      });
+    });
+
+    pickDay.addEventListener("change", updatePickPreview);
+
+    $("calPickBtn").addEventListener("click", openDatePicker);
+    $("calDateText").addEventListener("click", openDatePicker);
+    $("pickCancel").addEventListener("click", () => closeModal(pickerModal));
+
+    $("pickToday").addEventListener("click", () => {
+      closeModal(pickerModal);
+      goToDay(jstDayStart(Date.now()));
+    });
+
+    $("pickApply").addEventListener("click", () => {
+      const target = getPickedDay();
+      closeModal(pickerModal);
+      goToDay(target);
+    });
+
+    // ===== ＋ボタン → 追加種別の選択 =====
+    const choiceModal = $("choiceModal");
+
+    $("fabAdd").addEventListener("click", () => openModal(choiceModal));
+    $("choiceCancel").addEventListener("click", () => closeModal(choiceModal));
+
+    $("choiceEvent").addEventListener("click", () => {
+      closeModal(choiceModal);
+      openEventModal(null);
+    });
+
+    $("choiceRecord").addEventListener("click", () => {
+      closeModal(choiceModal);
+      openRecordModal(null);
+    });
+
+    // 初期日時：今日なら次の正時、それ以外は9:00
+    function defaultStartFor(dayStart) {
+      const isToday = dayStart === jstDayStart(Date.now());
+      const hour = isToday ? Math.min(23, jstParts(Date.now()).h + 1) : 9;
+      return dayStart + hour * HOUR_MS;
+    }
+
+    // ===== 予定追加・編集モーダル =====
+    const eventModal = $("eventModal");
+    const evStartAt = $("evStartAt");
+    const evEndAt = $("evEndAt");
+    const evTitle = $("evTitle");
+    const evCategory = $("evCategory");
+    const evBudget = $("evBudget");
+    const evMemo = $("evMemo");
+    const evDeleteBtn = $("evDelete");
+
+    function fillCategorySelect(selected) {
+      const names = categories.slice();
+      if (selected && !names.includes(selected)) names.push(selected);
+      evCategory.innerHTML = "";
+      names.forEach((name) => {
+        const option = document.createElement("option");
+        option.value = name;
+        option.textContent = categories.includes(name) ? name : name + "（削除済み）";
+        evCategory.appendChild(option);
+      });
+      evCategory.value = selected && names.includes(selected) ? selected : categories[0];
+    }
+
+    function readEventTimes() {
+      const start = parseDTInput(evStartAt.value);
+      const end = parseDTInput(evEndAt.value);
+      if (isNaN(start)) return { error: "開始日時を入力してください" };
+      if (isNaN(end)) return { error: "終了日時を入力してください" };
+      if (end <= start) return { error: "終了日時は開始日時より後にしてください" };
+      return { start: start, end: end };
+    }
+
+    function updateDurationHint() {
+      const hint = $("evDuration");
+      const times = readEventTimes();
+      hint.classList.toggle("error", !!times.error);
+      hint.textContent = times.error ? (evStartAt.value && evEndAt.value ? times.error : "") : formatDuration(times.end - times.start);
+    }
+
+    // 開始を変えて終了が開始以前になったら、終了を開始＋1時間に自動補正
+    evStartAt.addEventListener("change", () => {
+      const start = parseDTInput(evStartAt.value);
+      const end = parseDTInput(evEndAt.value);
+      if (!isNaN(start) && (isNaN(end) || end <= start)) {
+        evEndAt.value = toDTInput(start + HOUR_MS);
+      }
+      updateDurationHint();
+    });
+
+    evStartAt.addEventListener("input", updateDurationHint);
+    evEndAt.addEventListener("input", updateDurationHint);
+    evEndAt.addEventListener("change", updateDurationHint);
+
+    function openEventModal(ev) {
+      editingEventId = ev ? ev.id : null;
+      resetArmed(evDeleteBtn, "削除");
+
+      if (ev) {
+        $("eventModalTitle").textContent = "予定を編集";
+        $("evSave").textContent = "保存する";
+        $("evActions").className = "modal-actions spaced";
+        evDeleteBtn.style.display = "";
+
+        evStartAt.value = toDTInput(ev.timestamp);
+        evEndAt.value = toDTInput(getEventEnd(ev));
+        evTitle.value = ev.title;
+        fillCategorySelect(ev.category);
+        evBudget.value = ev.budget ? ev.budget.toLocaleString("ja-JP") : "";
+        evMemo.value = ev.memo || "";
+      } else {
+        const start = defaultStartFor(calDay);
+
+        $("eventModalTitle").textContent = "予定を追加";
+        $("evSave").textContent = "追加する";
+        $("evActions").className = "modal-actions two spaced";
+        evDeleteBtn.style.display = "none";
+
+        evStartAt.value = toDTInput(start);
+        evEndAt.value = toDTInput(start + HOUR_MS);
+        evTitle.value = "";
+        fillCategorySelect(null);
+        evBudget.value = "";
+        evMemo.value = "";
+      }
+
+      updateDurationHint();
+      openModal(eventModal);
+      eventModal.querySelector(".modal-card").scrollTop = 0;
+      // タップと同じ処理内でフォーカスすると、iPhoneでもキーボードが開く
+      if (!ev) evTitle.focus();
+    }
+
+    function saveEvent() {
+      const title = evTitle.value.trim();
+
+      if (!title) {
+        shake(evTitle);
+        showToast("題名を入力してください", true);
+        return;
+      }
+
+      const times = readEventTimes();
+      if (times.error) {
+        showToast(times.error, true);
+        return;
+      }
+
+      const data = {
+        title: title,
+        category: evCategory.value,
+        budget: parseAmount(evBudget.value),
+        memo: evMemo.value.trim(),
+        timestamp: times.start,
+        endTimestamp: times.end
+      };
+
+      const wasEditing = !!editingEventId;
+
+      if (wasEditing) {
+        const target = findEvent(editingEventId);
+        if (target) Object.assign(target, data);
+      } else {
+        events.push(Object.assign({ id: newId() }, data));
+      }
+
+      editingEventId = null;
+      saveEvents();
+      closeModal(eventModal);
+      renderLog();
+      renderManage();
+      renderSettings();
+      goToDay(jstDayStart(times.start), jstParts(times.start).h);
+      showToast(wasEditing ? "予定を更新しました" : "予定を追加しました");
+    }
+
+    function deleteEvent(id) {
+      events = events.filter((ev) => ev.id !== id);
+      saveEvents();
+      render();
+      renderSettings();
+      showToast("予定を削除しました");
+    }
+
+    $("evCancel").addEventListener("click", () => closeModal(eventModal));
+    $("evSave").addEventListener("click", saveEvent);
+    $("evAddCat").addEventListener("click", () => openCategoryModal({ type: "add", fromEvent: true }));
+
+    evDeleteBtn.addEventListener("click", () => {
+      if (!editingEventId) return;
+      const id = editingEventId;
+      armButton(evDeleteBtn, "もう一度で削除", "削除", () => {
+        editingEventId = null;
+        closeModal(eventModal);
+        deleteEvent(id);
+      });
+    });
+
+    evTitle.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.isComposing && e.keyCode !== 229) {
+        e.preventDefault();
+        evTitle.blur();
+      }
+    });
+
+    // ===== 収入・支出 追加・編集モーダル =====
+    const recordModal = $("recordModal");
+    const recAt = $("recAt");
+    const recAmount = $("recAmount");
+    const recMemo = $("recMemo");
+    const recLink = $("recLink");
+    const recDeleteBtn = $("recDelete");
+
+    function setRecType(type) {
+      recType = type;
+      document.querySelectorAll(".seg-btn").forEach((b) => {
+        b.classList.toggle("active", b.dataset.type === type);
+      });
+    }
+
+    document.querySelectorAll(".seg-btn").forEach((b) => {
+      // 収支の切り替えでキーボードが閉じないようにする
+      b.addEventListener("mousedown", (e) => e.preventDefault());
+      b.addEventListener("click", () => setRecType(b.dataset.type));
+    });
+
+    function addOption(select, value, text) {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = text;
+      select.appendChild(option);
+    }
+
+    // 候補の中に「その時刻を含む予定」があれば、選択を必須にする
+    function refreshRecLinkOptions(selected) {
+      const ts = parseDTInput(recAt.value);
+      const editing = editingRecordId ? records.find((r) => r.id === editingRecordId) : null;
+      const includeId = editing ? editing.eventId : null;
+      const candidates = isNaN(ts) ? [] : getLinkCandidates(ts, includeId);
+      const required = !isNaN(ts) && candidates.some((ev) => containsTime(ev, ts));
+
+      recLink.innerHTML = "";
+      if (required) addOption(recLink, "", "— 選択してください —");
+      addOption(recLink, "none", "紐づけない");
+      candidates.forEach((ev) => {
+        addOption(recLink, ev.id, (containsTime(ev, ts) ? "★ " : "") + eventOptionLabel(ev));
+      });
+
+      const values = Array.from(recLink.options).map((o) => o.value);
+      recLink.value = values.includes(selected) ? selected : (required ? "" : "none");
+
+      const hint = $("recLinkHint");
+      hint.classList.toggle("error", required);
+      hint.textContent = required
+        ? "★ この時刻に進行中の予定があります。紐づけ先を選んでください（必須）"
+        : (candidates.length ? "この日の予定から選べます" : "");
+    }
+
+    recAt.addEventListener("change", () => refreshRecLinkOptions(recLink.value));
+    recAt.addEventListener("input", () => refreshRecLinkOptions(recLink.value));
+
+    function openRecordModal(record) {
+      editingRecordId = record ? record.id : null;
+      resetArmed(recDeleteBtn, "削除");
+
+      if (record) {
+        $("recordModalTitle").textContent = "記録を編集";
+        $("recSave").textContent = "保存する";
+        $("recActions").className = "modal-actions spaced";
+        recDeleteBtn.style.display = "";
+
+        recAt.value = toDTInput(record.timestamp);
+        setRecType(record.type);
+        recAmount.value = record.amount.toLocaleString("ja-JP");
+        recMemo.value = record.memo || "";
+        refreshRecLinkOptions(findEvent(record.eventId) ? record.eventId : "none");
+      } else {
+        const isToday = calDay === jstDayStart(Date.now());
+        const ts = isToday ? Date.now() : calDay + 12 * HOUR_MS;
+
+        $("recordModalTitle").textContent = "収入・支出を記録";
+        $("recSave").textContent = "追加する";
+        $("recActions").className = "modal-actions two spaced";
+        recDeleteBtn.style.display = "none";
+
+        recAt.value = toDTInput(ts);
+        setRecType("minus");
+        recAmount.value = "";
+        recMemo.value = "";
+        refreshRecLinkOptions("");
+      }
+
+      openModal(recordModal);
+      recordModal.querySelector(".modal-card").scrollTop = 0;
+      if (!record) recAmount.focus();
+    }
+
+    function saveRecordModal() {
+      const ts = parseDTInput(recAt.value);
+      if (isNaN(ts)) {
+        shake(recAt);
+        showToast("日時を入力してください", true);
+        return;
+      }
+
+      const amount = parseAmount(recAmount.value);
+      if (!amount) {
+        shake(recAmount);
+        showToast("金額を入力してください", true);
+        return;
+      }
+
+      if (recLink.value === "") {
+        shake(recLink);
+        showToast("紐づけ先の予定を選択してください", true);
+        return;
+      }
+
+      const data = {
+        type: recType,
+        amount: amount,
+        memo: recMemo.value.trim(),
+        eventId: recLink.value === "none" ? null : recLink.value,
+        timestamp: ts
+      };
+
+      const wasEditing = !!editingRecordId;
+
+      if (wasEditing) {
+        const target = records.find((r) => r.id === editingRecordId);
+        if (target) Object.assign(target, data);
+      } else {
+        records.push(Object.assign({ id: newId(), hasPhoto: false }, data));
+      }
+
+      editingRecordId = null;
+      sortRecords();
+      saveRecords();
+      closeModal(recordModal);
+      render();
+
+      if ($("view-calendar").classList.contains("active")) {
+        goToDay(jstDayStart(ts), jstParts(ts).h);
+      }
+
+      const linked = findEvent(data.eventId);
+      showToast((wasEditing ? "記録を更新しました" : "記録しました") + (linked ? "（🔗 " + linked.title + "）" : ""));
+    }
+
+    $("recCancel").addEventListener("click", () => closeModal(recordModal));
+    $("recSave").addEventListener("click", saveRecordModal);
+
+    recMemo.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.isComposing && e.keyCode !== 229) {
+        e.preventDefault();
+        recMemo.blur();
+      }
+    });
+
+    recDeleteBtn.addEventListener("click", () => {
+      if (!editingRecordId) return;
+      const id = editingRecordId;
+      armButton(recDeleteBtn, "もう一度で削除", "削除", () => {
+        editingRecordId = null;
+        closeModal(recordModal);
+        deleteRecord(id);
+        showToast("記録を削除しました");
+      });
+    });
+
+    // ===== カテゴリ追加・名称変更モーダル =====
+    const categoryModal = $("categoryModal");
+    const catNameInput = $("catNameInput");
+
+    function openCategoryModal(mode) {
+      categoryMode = mode;
+      $("categoryModalTitle").textContent = mode.type === "rename" ? "カテゴリ名を変更" : "カテゴリを追加";
+      catNameInput.value = mode.type === "rename" ? mode.oldName : "";
+      openModal(categoryModal);
+      catNameInput.focus();
+    }
+
+    function saveCategory() {
+      if (!categoryMode) return;
+      const name = catNameInput.value.trim();
+
+      if (!name) {
+        shake(catNameInput);
+        showToast("カテゴリ名を入力してください", true);
+        return;
+      }
+
+      if (name === UNCATEGORIZED) {
+        shake(catNameInput);
+        showToast("「" + UNCATEGORIZED + "」は使えない名前です", true);
+        return;
+      }
+
+      const isRename = categoryMode.type === "rename";
+      if (categories.includes(name) && !(isRename && name === categoryMode.oldName)) {
+        shake(catNameInput);
+        showToast("同じ名前のカテゴリがあります", true);
+        return;
+      }
+
+      const eventOpen = eventModal.classList.contains("show");
+      let selectAfter = eventOpen ? evCategory.value : null;
+
+      if (isRename) {
+        const oldName = categoryMode.oldName;
+        const index = categories.indexOf(oldName);
+        if (index >= 0) categories[index] = name;
+        events.forEach((ev) => {
+          if (ev.category === oldName) ev.category = name;
+        });
+        if (selectAfter === oldName) selectAfter = name;
+        saveEvents();
+        showToast("「" + oldName + "」を「" + name + "」に変更しました");
+      } else {
+        categories.push(name);
+        if (categoryMode.fromEvent) selectAfter = name;
+        showToast("カテゴリ「" + name + "」を追加しました");
+      }
+
+      catNameInput.blur();
+      saveCategories();
+      categoryMode = null;
+      closeModal(categoryModal);
+      if (eventOpen) fillCategorySelect(selectAfter);
+      renderSettings();
+      renderCalendar();
+      renderManage();
+    }
+
+    function deleteCategory(name) {
+      if (categories.length <= 1) {
+        showToast("カテゴリは最低1つ必要です", true);
+        renderSettings();
+        return;
+      }
+      categories = categories.filter((c) => c !== name);
+      saveCategories();
+      renderSettings();
+      renderManage();
+      showToast("カテゴリ「" + name + "」を削除しました");
+    }
+
+    $("settingsAddCat").addEventListener("click", () => openCategoryModal({ type: "add" }));
+    $("catCancel").addEventListener("click", () => closeModal(categoryModal));
+    $("catSave").addEventListener("click", saveCategory);
+
+    catNameInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.isComposing && e.keyCode !== 229) {
+        e.preventDefault();
+        saveCategory();
+      }
+    });
+
+    // ===== モーダルの閉じ方（紐づけ確認モーダルは対象外＝選択必須） =====
+    const closableModals = [restoreModal, categoryModal, recordModal, eventModal, choiceModal, pickerModal];
+
+    // 外側を「押して離した」ときだけ閉じる（モーダル内から指をずらして外で離しても閉じない）
+    closableModals.forEach((modal) => {
+      modal.addEventListener("pointerdown", (e) => {
+        modal._pressedBackdrop = e.target === modal;
+      });
+      modal.addEventListener("click", (e) => {
+        const pressedBackdrop = modal._pressedBackdrop !== false;
+        modal._pressedBackdrop = undefined;
+        if (e.target === modal && pressedBackdrop) closeModal(modal);
+      });
+    });
+
+    // モーダル表示中は背景をスクロールさせない（中身が長いときはモーダル内だけスクロール）
+    function blockBackgroundScroll(e) {
+      if (e.target.closest("textarea")) return;
+      const card = e.target.closest(".modal-card");
+      if (!card || card.scrollHeight <= card.clientHeight) e.preventDefault();
+    }
+
+    document.querySelectorAll(".modal, .lightbox").forEach((el) => {
+      el.addEventListener("touchmove", blockBackgroundScroll, { passive: false });
+    });
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape") return;
+      if (linkModal.classList.contains("show")) return;
+      const top = closableModals.find((m) => m.classList.contains("show"));
+      if (top) closeModal(top);
+      else if (lightbox.classList.contains("show")) closeLightbox();
+    });
+
+    setInterval(() => {
+      if ($("view-calendar").classList.contains("active")) positionNowLine();
+      renderSummary();
+    }, 60000);
+
+    // ===== 描画：全体 =====
+    function render() {
+      renderSummary();
+      renderLog();
+      renderCalendar();
+      renderManage();
+      lastAddedId = null;
+    }
+
+    // ===== イベント =====
+    // スマホ：＋／−を押してもキーボードを閉じない（画面ずれによる押し間違い防止・連続入力用）
+    [$("plusBtn"), $("minusBtn")].forEach((btn) => {
+      btn.addEventListener("mousedown", (e) => e.preventDefault());
+    });
+
+    $("plusBtn").addEventListener("click", () => addRecord("plus"));
+    $("minusBtn").addEventListener("click", () => addRecord("minus"));
+
+    [amountEl, memoEl].forEach((el) => {
+      el.addEventListener("keydown", (e) => {
+        if (e.key !== "Enter") return;
+        if (e.isComposing || isAmountComposing() || e.keyCode === 229) return;
+        e.preventDefault();
+        addRecord(e.shiftKey ? "plus" : "minus");
+      });
+    });
+
+    $("clearBtn").addEventListener("click", (e) => {
+      if (records.length === 0) return;
+      armButton(e.currentTarget, "もう一度押すと全削除", "全削除", () => {
+        records = [];
+        photoDB.clear();
+        render();
+        saveRecords();
+        showToast("すべて削除しました");
+      });
+    });
+
+    render();
+    renderSettings();
+    amountEl.focus();
+
+    // 保存先フォルダの情報を読み込んでから、自動バックアップを開始
+    handleDB.get("dir").then((handle) => {
+      dirHandle = FS_SUPPORTED && handle ? handle : null;
+      runAutoBackupIfDue();
+      renderBackupUI();
+    });
+  </script>
+</body>
+</html>
